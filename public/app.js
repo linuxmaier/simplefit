@@ -318,10 +318,12 @@ function toggleRoutine(id) {
     expandedRoutines.add(id);
   }
   const body    = document.getElementById(`routine-body-${id}`);
+  const header  = document.getElementById(`routine-header-${id}`);
   const chevron = document.getElementById(`routine-chevron-${id}`);
   const open    = expandedRoutines.has(id);
-  body.style.display    = open ? "block" : "none";
-  chevron.style.transform = open ? "rotate(180deg)" : "";
+  body.style.display       = open ? "block" : "none";
+  header.style.marginBottom  = open ? "var(--gap)" : "";
+  chevron.style.transform  = open ? "rotate(180deg)" : "";
 }
 
 async function renderRoutines(el) {
@@ -336,8 +338,8 @@ async function renderRoutines(el) {
       const exes = await db.routineExercises.listForRoutine(r.id);
       exes.sort((a, b) => a.orderIndex - b.orderIndex);
       const open = expandedRoutines.has(r.id);
-      html += `<div class="card" style="padding-bottom:${open ? "var(--gap)" : "0"}">
-        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding-bottom:${open ? "var(--gap)" : "0"}"
+      html += `<div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;${open ? "margin-bottom:var(--gap)" : ""}" id="routine-header-${r.id}"
              onclick="app.toggleRoutine(${r.id})">
           <div class="card-title" style="margin:0">${esc(r.name)}</div>
           <div style="display:flex;align-items:center;gap:8px">
