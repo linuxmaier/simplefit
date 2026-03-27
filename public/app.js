@@ -342,6 +342,32 @@ async function renderRoutines(el) {
     }
   }
 
+  // Exercises section
+  const allExercises = await db.exercises.list();
+  allExercises.sort((a, b) => a.name.localeCompare(b.name));
+
+  html += `<div class="section-title">Exercises</div>
+    <button class="btn btn-ghost btn-full" style="margin-bottom:12px" onclick="app.showExerciseModal()">+ New Exercise</button>`;
+
+  if (allExercises.length === 0) {
+    html += "<div class=\"empty\">No exercises yet.</div>";
+  } else {
+    html += "<div class=\"card\">";
+    for (const e of allExercises) {
+      html += `<div class="session-row">
+        <div>
+          <div style="font-weight:600">${esc(e.name)}</div>
+          ${e.muscleGroup ? `<div class="muted" style="font-size:.8rem">${esc(e.muscleGroup)}</div>` : ""}
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="app.showExerciseModal(${e.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="app.deleteExercise(${e.id})">Delete</button>
+        </div>
+      </div>`;
+    }
+    html += "</div>";
+  }
+
   el.innerHTML = html;
 }
 
@@ -387,6 +413,49 @@ async function deleteRoutine(id) {
   const exes = await db.routineExercises.listForRoutine(id);
   for (const ex of exes) { await db.routineExercises.delete(ex.id); }
   await db.routines.delete(id);
+  navigate("routines");
+}
+
+// Exercise create/edit modal
+
+let editingExerciseId = null;
+
+function showExerciseModal(exerciseId = null) {
+  editingExerciseId = exerciseId;
+  const modal = document.getElementById("modal");
+  const backdrop = document.getElementById("modal-backdrop");
+
+  (exerciseId ? db.exercises.get(exerciseId) : Promise.resolve(null)).then((e) => {
+    modal.innerHTML = `
+      <div class="modal-title">${exerciseId ? "Edit Exercise" : "New Exercise"}</div>
+      <div class="field"><label>Name</label><input type="text" id="m-ex-name" value="${esc(e ? e.name : "")}"></div>
+      <div class="field"><label>Muscle group (optional)</label><input type="text" id="m-ex-muscle" value="${esc(e ? e.muscleGroup || "" : "")}"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="app.saveExercise()">Save</button>
+        <button class="btn btn-ghost" onclick="app.closeModal()">Cancel</button>
+      </div>`;
+    backdrop.classList.remove("hidden");
+  });
+}
+
+async function saveExercise() {
+  const name = document.getElementById("m-ex-name").value.trim();
+  if (!name) { toast("Name required"); return; }
+  const muscleGroup = document.getElementById("m-ex-muscle").value.trim();
+  try {
+    const record = { name, muscleGroup };
+    if (editingExerciseId) { record.id = editingExerciseId; }
+    await db.exercises.save(record);
+    closeModal();
+    navigate("routines");
+  } catch (err) {
+    toast("Error saving exercise: " + err.message);
+  }
+}
+
+async function deleteExercise(id) {
+  if (!confirm("Delete this exercise? Its history will be lost.")) { return; }
+  await db.exercises.delete(id);
   navigate("routines");
 }
 
@@ -809,6 +878,7 @@ function closeModal() {
   document.getElementById("modal-backdrop").classList.add("hidden");
   pickerCallback = null;
   editingRoutineId = null;
+  editingExerciseId = null;
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -847,6 +917,9 @@ window.app = {
   removeFromSession,
   showAddExerciseToSession,
   showRoutineModal,
+  showExerciseModal,
+  saveExercise,
+  deleteExercise,
   saveRoutine,
   deleteRoutine,
   showAddExerciseToRoutine,
