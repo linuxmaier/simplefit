@@ -370,9 +370,15 @@ async function saveRoutine() {
   const name = document.getElementById("m-routine-name").value.trim();
   if (!name) { toast("Name required"); return; }
   const notes = document.getElementById("m-routine-notes").value.trim();
-  await db.routines.save({ id: editingRoutineId || undefined, name, notes });
-  closeModal();
-  navigate("routines");
+  try {
+    const record = { name, notes };
+    if (editingRoutineId) { record.id = editingRoutineId; }
+    await db.routines.save(record);
+    closeModal();
+    navigate("routines");
+  } catch (err) {
+    toast("Error saving routine: " + err.message);
+  }
 }
 
 async function deleteRoutine(id) {
