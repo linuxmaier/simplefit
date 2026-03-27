@@ -1,0 +1,14 @@
+{
+  "name": "exercise-tracker",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "PWA exercise tracker with Google Drive backup",
+  "scripts": {
+    "lint": "eslint *.js public/*.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0"
+  }
+}
