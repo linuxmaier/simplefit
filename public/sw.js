@@ -1,12 +1,12 @@
 const CACHE = "exercise-tracker-v1";
 const ASSETS = [
-  "/",
-  "/index.html",
-  "/style.css",
-  "/app.js",
-  "/db.js",
-  "/drive.js",
-  "/manifest.json",
+  "./",
+  "./index.html",
+  "./style.css",
+  "./app.js",
+  "./db.js",
+  "./drive.js",
+  "./manifest.json",
 ];
 
 self.addEventListener("install", (e) => {
