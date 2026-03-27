@@ -339,9 +339,7 @@ async function renderRoutines(el) {
       html += `<div class="card" style="padding-bottom:${open ? "var(--gap)" : "0"}">
         <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding-bottom:${open ? "var(--gap)" : "0"}"
              onclick="app.toggleRoutine(${r.id})">
-          <div>
-            <div class="card-title" style="margin:0">${esc(r.name)}</div>
-          </div>
+          <div class="card-title" style="margin:0">${esc(r.name)}</div>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="muted" style="font-size:.8rem">${exes.length} exercise${exes.length !== 1 ? "s" : ""}</span>
             <span id="routine-chevron-${r.id}" style="color:var(--muted);transition:transform .2s;display:inline-block${open ? ";transform:rotate(180deg)" : ""}">▾</span>
