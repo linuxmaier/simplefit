@@ -282,7 +282,7 @@ async function finishWorkout() {
       toast("Workout saved (Drive backup failed)");
     }
   } else {
-    toast("Workout saved!");
+    toast("Workout saved locally!");
   }
 }
 
