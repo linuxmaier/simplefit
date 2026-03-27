@@ -271,8 +271,19 @@ async function finishWorkout() {
   activeSession.session.completedAt = new Date().toISOString();
   await db.sessions.save(activeSession.session);
   activeSession = null;
-  toast("Workout saved!");
   navigate("home");
+
+  if (drive.isSignedIn()) {
+    try {
+      const data = await db.exportAll();
+      await drive.backupToDrive(data);
+      toast("Workout saved & backed up to Drive");
+    } catch {
+      toast("Workout saved (Drive backup failed)");
+    }
+  } else {
+    toast("Workout saved!");
+  }
 }
 
 // Add exercise to existing session
