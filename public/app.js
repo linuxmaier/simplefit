@@ -521,19 +521,54 @@ async function removeRoutineExercise(routineExerciseId) {
 
 // Add exercise to a routine
 function showAddExerciseToRoutine(routineId) {
-  showExercisePicker(async (ex) => {
+  showExercisePicker((ex) => showAddExerciseDefaults(routineId, ex));
+}
+
+function showAddExerciseDefaults(routineId, ex) {
+  const modal = document.getElementById("modal");
+  const backdrop = document.getElementById("modal-backdrop");
+
+  modal.innerHTML = `
+    <div class="modal-title">${esc(ex.name)}</div>
+    <div class="muted" style="margin-bottom:16px;font-size:.85rem">Set defaults for this routine</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+      <div class="field">
+        <label>Sets</label>
+        <input type="number" id="m-add-sets" value="3" min="1">
+      </div>
+      <div class="field">
+        <label>Reps</label>
+        <input type="number" id="m-add-reps" value="10" min="1">
+      </div>
+      <div class="field">
+        <label>Weight (lbs)</label>
+        <input type="number" id="m-add-weight" value="0" min="0" step="2.5">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="app.confirmAddExerciseToRoutine(${routineId}, ${ex.id}, '${esc(ex.name)}')">Add</button>
+      <button class="btn btn-ghost" onclick="app.closeModal()">Cancel</button>
+    </div>`;
+  backdrop.classList.remove("hidden");
+}
+
+async function confirmAddExerciseToRoutine(routineId, exerciseId, exerciseName) {
+  try {
     const existing = await db.routineExercises.listForRoutine(routineId);
     await db.routineExercises.save({
       routineId,
-      exerciseId: ex.id,
-      exerciseName: ex.name,
-      defaultSets: 3,
-      defaultReps: 10,
-      defaultWeight: 0,
+      exerciseId,
+      exerciseName,
+      defaultSets:   parseInt(document.getElementById("m-add-sets").value, 10)   || 3,
+      defaultReps:   parseInt(document.getElementById("m-add-reps").value, 10)   || 10,
+      defaultWeight: parseFloat(document.getElementById("m-add-weight").value)   || 0,
       orderIndex: existing.length,
     });
+    closeModal();
     navigate("routines");
-  });
+  } catch (err) {
+    toast("Error adding exercise: " + err.message);
+  }
 }
 
 // ─── Exercise picker modal ────────────────────────────────────────────────────
@@ -983,6 +1018,8 @@ window.app = {
   removeFromSession,
   showAddExerciseToSession,
   showRoutineModal,
+  showAddExerciseDefaults,
+  confirmAddExerciseToRoutine,
   showRoutineExerciseModal,
   saveRoutineExercise,
   removeRoutineExercise,
