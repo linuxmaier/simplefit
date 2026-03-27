@@ -341,7 +341,6 @@ async function renderRoutines(el) {
              onclick="app.toggleRoutine(${r.id})">
           <div>
             <div class="card-title" style="margin:0">${esc(r.name)}</div>
-            ${r.notes && !open ? `<div class="muted" style="font-size:.8rem">${esc(r.notes)}</div>` : ""}
           </div>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="muted" style="font-size:.8rem">${exes.length} exercise${exes.length !== 1 ? "s" : ""}</span>
