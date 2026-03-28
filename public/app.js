@@ -10,37 +10,40 @@ const DRIVE_LAST_BACKUP_KEY = "driveLastBackup";
 
 // ─── Boot ────────────────────────────────────────────────────────────────────
 
-// Wait for the async GIS script to finish loading (up to 5 s).
-function waitForGIS() {
-  return new Promise((resolve) => {
-    if (window.google) { resolve(); return; }
-    const interval = setInterval(() => {
-      if (window.google) { clearInterval(interval); resolve(); }
-    }, 100);
-    setTimeout(() => { clearInterval(interval); resolve(); }, 5000);
-  });
-}
-
 async function boot() {
   await db.openDB();
 
-  // Restore Google Client ID if saved
+  // Restore Google Client ID and saved token if available
   const savedClientId = localStorage.getItem("gClientId");
   if (savedClientId) {
     drive.setClientId(savedClientId);
-    try {
-      await waitForGIS();
-      await drive.initDrive();
-      // Silently try to refresh the token so we can check Drive on open
-      const refreshed = await drive.silentRefresh();
-      if (!refreshed) {
-        // Silent refresh failed — show a reconnect banner
+    // initDrive restores the saved token immediately if still valid.
+    // We defer the GIS-dependent call until google is loaded.
+    const tryInit = async () => {
+      try {
+        const signedIn = await drive.initDrive();
+        if (signedIn) {
+          localStorage.removeItem("driveReconnectNeeded");
+        } else {
+          localStorage.setItem("driveReconnectNeeded", "1");
+        }
+      } catch {
         localStorage.setItem("driveReconnectNeeded", "1");
-      } else {
-        localStorage.removeItem("driveReconnectNeeded");
       }
-    } catch {
-      // not fatal — user can sign in from settings
+    };
+
+    if (window.google) {
+      await tryInit();
+    } else {
+      // GIS not loaded yet — wait for it then init in the background
+      const interval = setInterval(async () => {
+        if (window.google) {
+          clearInterval(interval);
+          await tryInit();
+          // Re-render home to update the reconnect banner if needed
+          if (currentView === "home") { renderView(); }
+        }
+      }, 100);
     }
   }
 

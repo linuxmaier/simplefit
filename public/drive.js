@@ -4,6 +4,7 @@
 
 const BACKUP_FILENAME = "exercise-tracker-backup.json";
 const SCOPES = "https://www.googleapis.com/auth/drive.appdata";
+const TOKEN_STORAGE_KEY = "driveToken";
 
 let tokenClient = null;
 let accessToken = null;
@@ -21,7 +22,31 @@ export function isSignedIn() {
   return !!accessToken;
 }
 
-// Initialize GIS token client. Returns a promise that resolves when ready.
+// Persist token + expiry to localStorage so it survives page reloads.
+function saveToken(token, expiresInSeconds) {
+  const expiresAt = Date.now() + expiresInSeconds * 1000;
+  localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token, expiresAt }));
+}
+
+// Load a previously saved token if it hasn't expired (with a 60 s buffer).
+function loadSavedToken() {
+  try {
+    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!raw) { return null; }
+    const { token, expiresAt } = JSON.parse(raw);
+    if (Date.now() < expiresAt - 60_000) { return token; }
+  } catch {
+    // ignore malformed storage
+  }
+  return null;
+}
+
+function clearSavedToken() {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
+// Initialize GIS token client and restore any saved token.
+// Returns true if already signed in from a saved token.
 export function initDrive() {
   return new Promise((resolve, reject) => {
     if (!clientId) {
@@ -37,17 +62,18 @@ export function initDrive() {
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: SCOPES,
-      callback: (response) => {
-        if (response.error) {
-          reject(new Error(response.error));
-          return;
-        }
-        accessToken = response.access_token;
-        resolve(accessToken);
-      },
+      callback: () => {}, // overridden per-call in signIn/silentRefresh
     });
 
-    resolve(null); // initialized but not yet signed in
+    // Restore saved token if still valid
+    const saved = loadSavedToken();
+    if (saved) {
+      accessToken = saved;
+      resolve(true);
+      return;
+    }
+
+    resolve(false);
   });
 }
 
@@ -63,6 +89,7 @@ export function signIn() {
         return;
       }
       accessToken = response.access_token;
+      saveToken(accessToken, response.expires_in || 3600);
       resolve(accessToken);
     };
     tokenClient.requestAccessToken({ prompt: "" });
@@ -74,6 +101,7 @@ export function signOut() {
     google.accounts.oauth2.revoke(accessToken);
     accessToken = null;
   }
+  clearSavedToken();
 }
 
 // Attempt a silent token refresh (no popup). Resolves true if successful.
@@ -83,6 +111,7 @@ export function silentRefresh() {
     tokenClient.callback = (response) => {
       if (response.error) { resolve(false); return; }
       accessToken = response.access_token;
+      saveToken(accessToken, response.expires_in || 3600);
       resolve(true);
     };
     try {
@@ -129,27 +158,20 @@ export async function backupToDrive(jsonData) {
 
   let url;
   let method;
-  let metadataBlob;
 
   if (existing) {
-    // Update existing file content only
     url = `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=multipart`;
     method = "PATCH";
   } else {
-    // Create new file in appDataFolder
     url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
     method = "POST";
   }
 
   const metadata = existing
     ? { modifiedTime: new Date().toISOString() }
-    : {
-      name: BACKUP_FILENAME,
-      parents: ["appDataFolder"],
-    };
+    : { name: BACKUP_FILENAME, parents: ["appDataFolder"] };
 
-  metadataBlob = new Blob([JSON.stringify(metadata)], { type: "application/json" });
-
+  const metadataBlob = new Blob([JSON.stringify(metadata)], { type: "application/json" });
   const form = new FormData();
   form.append("metadata", metadataBlob);
   form.append("file", blob);
