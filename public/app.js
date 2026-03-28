@@ -11,6 +11,12 @@ const DRIVE_LAST_BACKUP_KEY = "driveLastBackup";
 // ─── Boot ────────────────────────────────────────────────────────────────────
 
 async function boot() {
+  // Apply saved theme before first render (default: light)
+  const savedTheme = localStorage.getItem("appTheme") || "light";
+  if (savedTheme === "dark") {
+    document.documentElement.dataset.theme = "dark";
+  }
+
   await db.openDB();
 
   // Restore Google Client ID and saved token if available
@@ -65,6 +71,7 @@ async function boot() {
   }
 
   renderNav();
+  renderHeaderIcons();
   navigate("home");
 }
 
@@ -73,24 +80,60 @@ async function boot() {
 function navigate(view) {
   currentView = view;
   renderNav();
+  renderHeaderIcons();
   renderView();
 }
 
 function renderNav() {
   const tabs = [
-    { id: "home",     icon: "🏠", label: "Home" },
-    { id: "routines", icon: "📋", label: "Routines" },
-    { id: "log",      icon: "📅", label: "Log" },
-    { id: "settings", icon: "⚙️",  label: "Settings" },
+    { id: "home",     icon: "home",         label: "Home" },
+    { id: "routines", icon: "dumbbell",      label: "Routines" },
+    { id: "log",      icon: "history",       label: "Log" },
+    { id: "settings", icon: "settings",      label: "Settings" },
   ];
 
   document.getElementById("nav").innerHTML = tabs
     .map(
       (t) => `<button class="${currentView === t.id ? "active" : ""}" onclick="app.navigate('${t.id}')">
-        <span class="icon">${t.icon}</span>${t.label}
+        <i data-lucide="${t.icon}"></i>${t.label}
       </button>`
     )
     .join("");
+
+  if (window.lucide) { lucide.createIcons(); }
+}
+
+function renderHeaderIcons() {
+  const reconnectNeeded = localStorage.getItem("driveReconnectNeeded");
+  const clientConfigured = localStorage.getItem("gClientId");
+  const signedIn = drive.isSignedIn();
+
+  const cloud = document.getElementById("header-cloud");
+  if (clientConfigured) {
+    if (signedIn) {
+      cloud.innerHTML = "<i data-lucide=\"cloud\"></i>";
+    } else if (reconnectNeeded) {
+      cloud.innerHTML = "<i data-lucide=\"cloud-off\"></i>";
+    } else {
+      cloud.innerHTML = "<i data-lucide=\"cloud\"></i>";
+    }
+  } else {
+    cloud.innerHTML = "";
+  }
+
+  const toggle = document.getElementById("theme-toggle");
+  const isDark = document.documentElement.dataset.theme === "dark";
+  toggle.innerHTML = isDark ? "<i data-lucide=\"sun\"></i>" : "<i data-lucide=\"moon\"></i>";
+
+  if (window.lucide) { lucide.createIcons(); }
+}
+
+function toggleTheme() {
+  const isDark = document.documentElement.dataset.theme === "dark";
+  const next = isDark ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("appTheme", next);
+  renderHeaderIcons();
 }
 
 function renderView() {
@@ -387,7 +430,7 @@ async function renderRoutines(el) {
           <div class="card-title" style="margin:0">${esc(r.name)}</div>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="muted" style="font-size:.8rem">${exes.length} exercise${exes.length !== 1 ? "s" : ""}</span>
-            <span id="routine-chevron-${r.id}" style="color:var(--muted);transition:transform .2s;display:inline-block${open ? ";transform:rotate(180deg)" : ""}">▾</span>
+            <i data-lucide="chevron-down" id="routine-chevron-${r.id}" style="width:16px;height:16px;stroke:var(--muted);transition:transform .2s;display:inline-block${open ? ";transform:rotate(180deg)" : ""}"></i>
           </div>
         </div>
         <div id="routine-body-${r.id}" style="display:${open ? "block" : "none"}">
@@ -451,6 +494,7 @@ async function renderRoutines(el) {
   }
 
   el.innerHTML = html;
+  if (window.lucide) { lucide.createIcons(); }
 }
 
 // Modal state for routine editing
@@ -1269,6 +1313,7 @@ function toast(msg) {
 
 window.app = {
   navigate,
+  toggleTheme,
   startWorkout,
   finishWorkout,
   toggleExercise,

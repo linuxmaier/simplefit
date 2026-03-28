@@ -10,6 +10,7 @@ export default [
       globals: {
         ...globals.browser,
         google: "readonly",
+        lucide: "readonly",
       },
     },
     rules: {

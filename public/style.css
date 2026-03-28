@@ -2,6 +2,21 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  --bg:        #fdf8f2;
+  --surface:   #ffffff;
+  --border:    #e4d9cc;
+  --accent:    #2563eb;
+  --accent-dk: #1d4ed8;
+  --green:     #16a34a;
+  --red:       #dc2626;
+  --warn:      #ea8c1e;
+  --text:      #1c1208;
+  --muted:     #8a7660;
+  --radius:    12px;
+  --gap:       16px;
+}
+
+[data-theme="dark"] {
   --bg:        #0f172a;
   --surface:   #1e293b;
   --border:    #334155;
@@ -12,8 +27,6 @@
   --warn:      #f59e0b;
   --text:      #f1f5f9;
   --muted:     #94a3b8;
-  --radius:    12px;
-  --gap:       16px;
 }
 
 html, body {
@@ -53,6 +66,35 @@ header h1 {
   letter-spacing: -0.3px;
 }
 
+.header-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-cloud svg {
+  width: 20px;
+  height: 20px;
+  stroke: var(--muted);
+  display: block;
+}
+
+.theme-toggle {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.theme-toggle svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+}
+
 #main {
   flex: 1;
   overflow-y: auto;
@@ -89,7 +131,7 @@ nav button {
   transition: color 0.15s;
 }
 
-nav button .icon { font-size: 1.4rem; line-height: 1; }
+nav button svg { width: 22px; height: 22px; stroke: currentColor; margin-bottom: 1px; }
 nav button.active { color: var(--accent); }
 
 /* ── Cards ────────────────────────────────────────────────────────────────── */
@@ -99,6 +141,11 @@ nav button.active { color: var(--accent); }
   border-radius: var(--radius);
   padding: var(--gap);
   margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+[data-theme="dark"] .card {
+  box-shadow: none;
 }
 
 .card-title {
@@ -140,7 +187,7 @@ input[type="number"],
 select,
 textarea {
   width: 100%;
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
@@ -200,7 +247,7 @@ textarea { resize: vertical; min-height: 70px; }
 
 /* ── Inline edit form ─────────────────────────────────────────────────────── */
 .inline-edit {
-  background: var(--bg);
+  background: var(--border);
   border-radius: 8px;
   padding: 12px;
   margin: 4px 0 8px;
@@ -263,7 +310,7 @@ canvas { max-width: 100%; }
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--muted);
+  color: var(--warn);
   margin: 20px 0 10px;
 }
 
