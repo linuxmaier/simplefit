@@ -1,0 +1,157 @@
+# Agent Guide — Simple Exercise
+
+## Project overview
+
+A mobile-first PWA exercise tracker hosted on GitHub Pages. No build step — vanilla ES modules served directly from `public/`. IndexedDB for local storage, Google Drive (appDataFolder) for cloud backup.
+
+- **Live URL:** `https://linuxmaier.github.io/simple-exercise/`
+- **Repo:** `git@github.com:linuxmaier/simple-exercise.git`
+
+## File structure
+
+```
+public/
+  index.html      App shell (loads app.js as type="module")
+  app.js          Main SPA — all views, state, UI logic (~1300 lines)
+  db.js           IndexedDB layer — all persistence
+  drive.js        Google Drive integration (GIS implicit OAuth flow)
+  style.css       Dark mobile-first theme (CSS custom properties)
+  sw.js           Service worker — offline cache
+  manifest.json   PWA manifest (name: "Simple Exercise", short_name: "Exercise")
+  icon.svg        Dumbbell SVG icon on indigo background
+eslint.config.js  ESLint 9 flat config (browser globals, double quotes, semi, 2-space indent)
+package.json      npm scripts: lint, lint:fix
+.github/
+  workflows/
+    deploy.yml    lint → deploy (deploy requires lint to pass)
+    lint.yml      lint on push/PR
+```
+
+## Architecture
+
+### No build step
+All `public/` files are served verbatim by GitHub Pages. **Use relative paths everywhere** — absolute paths like `/style.css` resolve to the domain root, not the `/simple-exercise/` subdirectory.
+
+### SPA pattern
+`app.js` renders all views imperatively into `<main id="main">` by building HTML strings and assigning to `el.innerHTML`. There is no framework.
+
+### `window.app` — inline onclick handlers
+Because views are built with HTML strings containing `onclick="app.foo()"`, all callable functions must be exported on `window.app` at the bottom of `app.js`. If you add a new function that is called from inline HTML, add it to the `window.app` object.
+
+### Views (currentView state)
+| Value | Header | Render function |
+|---|---|---|
+| `home` | Workout | `renderHome` |
+| `workout` | Active | `renderWorkout` |
+| `routines` | Routines | `renderRoutines` |
+| `log` | History | `renderLog` |
+| `settings` | Settings | `renderSettings` |
+| `exercise-history` | Progress | `renderExerciseHistory` |
+| `edit-session` | Edit Workout | `renderEditSession` |
+
+Navigate with `navigate(viewName)` — sets `currentView`, re-renders nav and view.
+
+## Data model (IndexedDB)
+
+DB name: `exercise-tracker`, version 1. All stores use `{ keyPath: "id", autoIncrement: true }`.
+
+| Store | Key fields | Notes |
+|---|---|---|
+| `routines` | id, name, notes, updatedAt | |
+| `exercises` | id, name, muscleGroup, notes, updatedAt | unique index on `name` |
+| `routineExercises` | id, routineId, exerciseId, exerciseName, defaultSets, defaultReps, defaultWeight | join table |
+| `sessions` | id, routineId, routineName, date, completedAt | open session has no `completedAt` |
+| `sessionExercises` | id, sessionId, exerciseId, exerciseName, sets, reps, weight, done | |
+
+**Critical:** Never pass `id: undefined` to `db.*.save()` — IDB throws a DataError. Omit the `id` field entirely for new records: `{ name: "foo" }` not `{ id: undefined, name: "foo" }`.
+
+**exercises.name is unique.** Attempting to save a duplicate name throws a ConstraintError — catch it and show a user-friendly message.
+
+### db.js API
+```js
+db.routines.list()                    // → Promise<Routine[]>
+db.routines.get(id)                   // → Promise<Routine>
+db.routines.save(record)              // upsert — returns key
+db.routines.delete(id)
+
+db.exercises.*                        // same shape
+db.routineExercises.listForRoutine(routineId)
+db.routineExercises.get(id)
+db.routineExercises.save(record)
+db.routineExercises.delete(id)
+
+db.sessions.list()
+db.sessions.get(id)
+db.sessions.save(record)
+db.sessions.delete(id)
+
+db.sessionExercises.listForSession(sessionId)
+db.sessionExercises.listForExercise(exerciseId)
+db.sessionExercises.save(record)
+db.sessionExercises.delete(id)
+
+db.exportAll()   // → full backup object
+db.importAll(data)  // clears all stores, then restores
+```
+
+## Drive integration (drive.js)
+
+- **Scope:** `https://www.googleapis.com/auth/drive.appdata` (appDataFolder — hidden from user's Drive UI)
+- **Token persistence:** Stored in `localStorage` under key `"driveToken"` as `{ token, expiresAt }`. Loaded on boot via `loadSavedToken()` with a 60-second expiry buffer.
+- **Client ID:** Stored in `localStorage` under `"gClientId"` — user enters it in Settings.
+- **Backup conflict detection:** `localStorage["driveLastBackup"]` stores ISO timestamp of last backup from this device. On boot, `checkDriveOnOpen()` compares Drive's `modifiedTime` against the local last session activity time to decide whether to prompt a restore.
+
+### drive.js API
+```js
+drive.setClientId(id)
+drive.isConfigured()      // clientId set?
+drive.isSignedIn()        // accessToken in memory?
+drive.initDrive()         // → Promise<bool> (true = restored saved token)
+drive.signIn()            // → Promise (opens consent popup)
+drive.signOut()           // revokes token, clears localStorage
+drive.silentRefresh()     // → Promise<bool>
+drive.backupToDrive(jsonData)    // → Promise (multipart upload)
+drive.restoreFromDrive()         // → Promise<parsedJSON>
+drive.getDriveModifiedTime()     // → Promise<ISOString | null>
+```
+
+## UI patterns
+
+### Inline ⋮ context menus
+Tapping ⋮ calls `toggleMenu(menuId)` which toggles `.hidden` on the corresponding `<div class="inline-actions hidden" id="menu-{menuId}">`. Only one menu is open at a time — `openMenuId` tracks the current open menu.
+
+Menu ID naming:
+- Routine card: `menu-routine-{routineId}` → `app.routineMenu(routineId)`
+- Routine exercise row: `menu-re-{routineExerciseId}` → `app.routineExerciseMenu(id)`
+- Standalone exercise row: `menu-exercise-{exerciseId}` → `app.exerciseMenu(id)`
+
+### Collapsible routine cards
+`expandedRoutines` (Set) tracks which routine IDs are expanded. `toggleRoutine(id)` shows/hides `#routine-body-{id}` and flips `#routine-chevron-{id}`.
+
+### Modals
+Bottom-sheet modals: set `modal.innerHTML`, then `backdrop.classList.remove("hidden")`. Close with `closeModal()`. Active modal state: `editingRoutineId`, `editingExerciseId`, `editingSessionId`, `pickerCallback`.
+
+**Picker callback gotcha:** `closeModal()` clears `pickerCallback`. Always capture the callback before closing: `const cb = pickerCallback; closeModal(); if (cb) { cb(result); }`
+
+### Toast notifications
+`toast(msg)` — 2.5 s auto-dismiss.
+
+### HTML escaping
+Always use `esc(str)` when interpolating user-supplied strings into HTML. Defined in app.js.
+
+## Linting
+
+```bash
+npm run lint        # check
+npm run lint:fix    # auto-fix
+```
+
+ESLint 9 flat config in `eslint.config.js`. Rules: double quotes, semicolons, 2-space indent. `google` is a readonly global (GIS). Fix all errors before pushing — the deploy workflow requires lint to pass.
+
+## Service worker / caching
+
+`sw.js` caches all static assets under `CACHE = "exercise-tracker-v1"`. **Bump the cache name when adding new assets** to the ASSETS array, otherwise the old service worker will serve stale files. Google API requests are passed through (not cached).
+
+## Deployment
+
+Push to `main` → GitHub Actions runs lint → on success, deploys `public/` to GitHub Pages. No manual steps needed.
