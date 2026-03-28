@@ -65,7 +65,7 @@ Drive backup uses OAuth 2.0. You need a Google Cloud project with the Drive API 
 
 ### 2. Configure the app
 
-1. Open the app and tap **Settings** (⚙️)
+1. Open the app and tap **Settings**
 2. Paste your Client ID into the **Google OAuth Client ID** field and tap **Save Client ID**
 3. Tap **Sign in to Google** and complete the OAuth flow
 4. Tap **Backup Now** to create your first backup
@@ -80,7 +80,7 @@ Backups are stored in your Google Drive's hidden **App Data** folder — they wo
 
 ### Building your routine library
 
-1. Tap **Routines** (📋) → **New Routine**
+1. Tap **Routines** → **New Routine**
 2. Give the routine a name (e.g. "Push Day") and optional notes
 3. Tap **+ Add Exercise** on the routine card
 4. Select an existing exercise or create a new one with a name and optional muscle group
@@ -88,7 +88,7 @@ Backups are stored in your Google Drive's hidden **App Data** folder — they wo
 
 ### Starting a workout
 
-1. Tap **Workout** (🏠) and press **Start** next to a routine
+1. Tap **Home** and press **Start** next to a routine
 2. Work through your exercises — tap the circle on the left to check one off
 3. Tap **Edit** on any exercise to adjust sets, reps, or weight for this session
 4. Tap **+ Add Exercise** to add something not in the routine
@@ -96,7 +96,7 @@ Backups are stored in your Google Drive's hidden **App Data** folder — they wo
 
 ### Viewing progress
 
-- Tap **History** (📅) to see past sessions
+- Tap **Log** to see past sessions
 - Tap any session to see the full exercise breakdown
 - Scroll down to **Exercise Progress** and tap an exercise to see a weight-over-time chart and full session history for that movement
 
