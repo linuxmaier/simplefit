@@ -116,9 +116,9 @@ async function renderHome(el) {
   let html = "";
 
   if (localStorage.getItem("driveReconnectNeeded") && localStorage.getItem("gClientId")) {
-    html += `<div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <span class="muted" style="font-size:.85rem">Drive disconnected</span>
-      <button class="btn btn-ghost btn-sm" onclick="app.reconnectDrive()">Reconnect</button>
+    html += `<div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;border-left:4px solid var(--warn)">
+      <span style="font-weight:600">Drive disconnected</span>
+      <button class="btn btn-warn btn-sm" onclick="app.reconnectDrive()">Reconnect</button>
     </div>`;
   }
 

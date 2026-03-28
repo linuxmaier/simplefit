@@ -9,6 +9,7 @@
   --accent-dk: #4f46e5;
   --green:     #22c55e;
   --red:       #ef4444;
+  --warn:      #f59e0b;
   --text:      #f1f5f9;
   --muted:     #94a3b8;
   --radius:    12px;
@@ -126,6 +127,7 @@ nav button.active { color: var(--accent); }
 .btn-green    { background: var(--green);   color: #fff; }
 .btn-danger   { background: var(--red);     color: #fff; }
 .btn-ghost    { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-warn     { background: var(--warn); color: #000; }
 .btn-sm       { padding: 6px 12px; font-size: 0.85rem; }
 .btn-full     { width: 100%; justify-content: center; }
 
