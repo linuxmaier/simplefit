@@ -25,7 +25,7 @@ A lightweight, mobile-first PWA for tracking workouts. Runs entirely in the brow
 
 - Define reusable **routines** composed of exercises with default sets, reps, and weight
 - **Per-set progress tracking** — a segmented progress bar for each exercise lets you tap to mark individual sets complete
-- **Timed exercise support** — exercises can be weight/reps-based or duration-based (e.g. planks, runs) with an in-app countdown timer that auto-completes the set
+- **Timed exercise support** — exercises can be weight/reps-based or duration-based (e.g. planks, runs) with an in-app countdown timer that auto-completes the set and fires a system notification when done
 - Edit sets, reps, weight, or duration inline mid-workout, with an option to **update routine defaults** from the new values
 - Add exercises on the fly during a session
 - View **exercise history** with a weight-over-time chart

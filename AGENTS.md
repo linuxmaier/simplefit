@@ -14,7 +14,7 @@ A mobile-first PWA exercise tracker hosted on GitHub Pages. No build step — va
 ```
 public/
   index.html      App shell (loads app.js as type="module")
-  app.js          Main SPA — all views, state, UI logic (~1650 lines)
+  app.js          Main SPA — all views, state, UI logic (~1700 lines)
   db.js           IndexedDB layer — all persistence
   drive.js        Google Drive integration (GIS implicit OAuth flow)
   style.css       Light/cream mobile-first theme with dark mode (CSS custom properties)
@@ -139,7 +139,10 @@ Bottom-sheet modals: set `modal.innerHTML`, then `backdrop.classList.remove("hid
 Each exercise in the active workout shows a segmented progress bar (one segment per set). Tapping a segment fills all segments up to that point (sequential fill). Tapping the last filled segment undoes it. When all segments are filled, the exercise is marked complete. Implemented via `tapSet(exId, setNum)` and rendered by `renderSetBar(ex)`.
 
 ### Exercise types
-Exercises have a `type` field: `"weight"` (default, reps-based) or `"timed"` (duration-based). Timed exercises show a countdown timer with Start/Stop controls in the workout view. The timer auto-completes the current set when it reaches zero, with audio + vibration alerts. Timer state is ephemeral (`activeTimer` in module scope) — not persisted to DB.
+Exercises have a `type` field: `"weight"` (default, reps-based) or `"timed"` (duration-based). Timed exercises show a countdown timer with Start/Stop controls in the workout view. The timer auto-completes the current set when it reaches zero, with vibration + a system notification (if enabled). Timer state is ephemeral (`activeTimer` in module scope) — not persisted to DB.
+
+### Notifications
+Web Notifications API is used for timer completion alerts. Permission is requested from the Settings page and stored as `localStorage["notificationsEnabled"] = "true"`. `notificationsEnabled()` checks both the permission state and the localStorage flag. If a session contains timed exercises and notifications are not enabled, a banner is shown in the workout view linking to Settings. Key functions: `requestNotificationPermission()`, `disableNotifications()`.
 
 ### Update routine defaults prompt
 When a user edits sets/reps/weight/duration inline during a workout, `saveInlineEdit` compares the new values against the routine exercise defaults (via `routineExerciseId`). If they differ, an action toast appears offering to update the routine defaults. This only applies to exercises that came from a routine (not ad-hoc adds).
