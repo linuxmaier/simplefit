@@ -1,5 +1,7 @@
 # Agent Guide — Simple Exercise
 
+> **Note:** `CLAUDE.md` is a symlink to this file (`AGENTS.md`). All edits should be made directly to `AGENTS.md`.
+
 ## Project overview
 
 A mobile-first PWA exercise tracker hosted on GitHub Pages. No build step — vanilla ES modules served directly from `public/`. IndexedDB for local storage, Google Drive (appDataFolder) for cloud backup.
@@ -12,10 +14,10 @@ A mobile-first PWA exercise tracker hosted on GitHub Pages. No build step — va
 ```
 public/
   index.html      App shell (loads app.js as type="module")
-  app.js          Main SPA — all views, state, UI logic (~1300 lines)
+  app.js          Main SPA — all views, state, UI logic (~1650 lines)
   db.js           IndexedDB layer — all persistence
   drive.js        Google Drive integration (GIS implicit OAuth flow)
-  style.css       Dark mobile-first theme (CSS custom properties)
+  style.css       Light/cream mobile-first theme with dark mode (CSS custom properties)
   sw.js           Service worker — offline cache
   manifest.json   PWA manifest (name: "Simple Exercise", short_name: "Exercise")
   icon.svg        Dumbbell SVG icon on indigo background
@@ -58,10 +60,10 @@ DB name: `exercise-tracker`, version 1. All stores use `{ keyPath: "id", autoInc
 | Store | Key fields | Notes |
 |---|---|---|
 | `routines` | id, name, notes, updatedAt | |
-| `exercises` | id, name, muscleGroup, notes, updatedAt | unique index on `name` |
-| `routineExercises` | id, routineId, exerciseId, exerciseName, defaultSets, defaultReps, defaultWeight | join table |
+| `exercises` | id, name, muscleGroup, type, notes, updatedAt | unique index on `name`; `type` is `"weight"` (default) or `"timed"` |
+| `routineExercises` | id, routineId, exerciseId, exerciseName, defaultSets, defaultReps, defaultWeight, defaultDuration | join table; `defaultDuration` (seconds) used for timed exercises |
 | `sessions` | id, routineId, routineName, date, completedAt | open session has no `completedAt` |
-| `sessionExercises` | id, sessionId, exerciseId, exerciseName, sets, reps, weight, done | |
+| `sessionExercises` | id, sessionId, exerciseId, exerciseName, type, sets, reps, weight, duration, setsCompleted, completed, routineExerciseId | `setsCompleted` tracks per-set progress (0..sets); `duration` in seconds for timed exercises; `routineExerciseId` links back to routine defaults (null for ad-hoc) |
 
 **Critical:** Never pass `id: undefined` to `db.*.save()` — IDB throws a DataError. Omit the `id` field entirely for new records: `{ name: "foo" }` not `{ id: undefined, name: "foo" }`.
 
@@ -133,8 +135,17 @@ Bottom-sheet modals: set `modal.innerHTML`, then `backdrop.classList.remove("hid
 
 **Picker callback gotcha:** `closeModal()` clears `pickerCallback`. Always capture the callback before closing: `const cb = pickerCallback; closeModal(); if (cb) { cb(result); }`
 
+### Set progress bar
+Each exercise in the active workout shows a segmented progress bar (one segment per set). Tapping a segment fills all segments up to that point (sequential fill). Tapping the last filled segment undoes it. When all segments are filled, the exercise is marked complete. Implemented via `tapSet(exId, setNum)` and rendered by `renderSetBar(ex)`.
+
+### Exercise types
+Exercises have a `type` field: `"weight"` (default, reps-based) or `"timed"` (duration-based). Timed exercises show a countdown timer with Start/Stop controls in the workout view. The timer auto-completes the current set when it reaches zero, with audio + vibration alerts. Timer state is ephemeral (`activeTimer` in module scope) — not persisted to DB.
+
+### Update routine defaults prompt
+When a user edits sets/reps/weight/duration inline during a workout, `saveInlineEdit` compares the new values against the routine exercise defaults (via `routineExerciseId`). If they differ, an action toast appears offering to update the routine defaults. This only applies to exercises that came from a routine (not ad-hoc adds).
+
 ### Toast notifications
-`toast(msg)` — 2.5 s auto-dismiss.
+`toast(msg)` — 2.5 s auto-dismiss. `actionToast(html)` — HTML-capable toast with interactive buttons, 6 s auto-dismiss, pointer events enabled.
 
 ### HTML escaping
 Always use `esc(str)` when interpolating user-supplied strings into HTML. Defined in app.js.
@@ -150,7 +161,7 @@ ESLint 9 flat config in `eslint.config.js`. Rules: double quotes, semicolons, 2-
 
 ## Service worker / caching
 
-`sw.js` caches all static assets under `CACHE = "exercise-tracker-v1"`. **Bump the cache name when adding new assets** to the ASSETS array, otherwise the old service worker will serve stale files. Google API requests are passed through (not cached).
+`sw.js` caches all static assets under `CACHE = "exercise-tracker-v3"`. **Bump the cache name when adding new assets** to the ASSETS array, otherwise the old service worker will serve stale files. Google API requests are passed through (not cached).
 
 ## Deployment
 

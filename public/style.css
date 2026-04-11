@@ -206,9 +206,9 @@ textarea { resize: vertical; min-height: 70px; }
 /* ── Exercise rows (active workout) ───────────────────────────────────────── */
 .ex-row {
   display: grid;
-  grid-template-columns: 40px 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
 }
@@ -234,6 +234,12 @@ textarea { resize: vertical; min-height: 70px; }
 .ex-name { font-weight: 600; font-size: 0.95rem; }
 .ex-meta { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
 
+.ex-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .ex-edit-btn {
   background: none;
   border: 1px solid var(--border);
@@ -243,6 +249,39 @@ textarea { resize: vertical; min-height: 70px; }
   font-size: 0.8rem;
   cursor: pointer;
   white-space: nowrap;
+}
+
+/* ── Set progress bar ────────────────────────────────────────────────────── */
+.set-bar {
+  display: flex;
+  gap: 2px;
+  height: 24px;
+  grid-column: 1 / -1;
+}
+.set-seg {
+  flex: 1;
+  min-width: 16px;
+  background: var(--border);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.set-seg:first-child { border-radius: 4px 0 0 4px; }
+.set-seg:last-child { border-radius: 0 4px 4px 0; }
+.set-seg:only-child { border-radius: 4px; }
+.set-seg.done { background: var(--green); }
+
+/* ── Timer ───────────────────────────────────────────────────────────────── */
+.timer-active {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.timer-display {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
 }
 
 /* ── Inline edit form ─────────────────────────────────────────────────────── */
@@ -365,6 +404,18 @@ canvas { max-width: 100%; }
 .success-text { color: var(--green); }
 .muted { color: var(--muted); }
 
+/* ── Notification banner ──────────────────────────────────────────────────── */
+.notif-banner {
+  background: var(--surface);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.notif-banner a { color: var(--accent); text-decoration: none; }
+
 /* ── Toast ────────────────────────────────────────────────────────────────── */
 #toast {
   position: fixed;
@@ -381,6 +432,9 @@ canvas { max-width: 100%; }
   transition: opacity 0.2s, transform 0.2s;
   z-index: 200;
   pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   white-space: nowrap;
 }
 #toast.show {

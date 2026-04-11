@@ -24,8 +24,9 @@ A lightweight, mobile-first PWA for tracking workouts. Runs entirely in the brow
 ## Features
 
 - Define reusable **routines** composed of exercises with default sets, reps, and weight
-- **Start a workout** from any routine and check off exercises as you go
-- Edit sets, reps, or weight inline mid-workout
+- **Per-set progress tracking** — a segmented progress bar for each exercise lets you tap to mark individual sets complete
+- **Timed exercise support** — exercises can be weight/reps-based or duration-based (e.g. planks, runs) with an in-app countdown timer that auto-completes the set
+- Edit sets, reps, weight, or duration inline mid-workout, with an option to **update routine defaults** from the new values
 - Add exercises on the fly during a session
 - View **exercise history** with a weight-over-time chart
 - Browse a **session log** of past workouts
@@ -83,16 +84,17 @@ Backups are stored in your Google Drive's hidden **App Data** folder — they wo
 1. Tap **Routines** → **New Routine**
 2. Give the routine a name (e.g. "Push Day") and optional notes
 3. Tap **+ Add Exercise** on the routine card
-4. Select an existing exercise or create a new one with a name and optional muscle group
-5. Default sets, reps, and weight start at 3 × 10 @ 0 lbs — you can update these during a workout and they'll be remembered for next time
+4. Select an existing exercise or create a new one — choose **Weight/Reps** or **Timed** as the exercise type
+5. Default sets, reps (or duration), and weight start at 3 × 10 @ 0 lbs (or 3 × 0:60 for timed) — you can update these during a workout and save the new defaults
 
 ### Starting a workout
 
 1. Tap **Home** and press **Start** next to a routine
-2. Work through your exercises — tap the circle on the left to check one off
-3. Tap **Edit** on any exercise to adjust sets, reps, or weight for this session
-4. Tap **+ Add Exercise** to add something not in the routine
-5. When you're done, tap **Finish** — the session is saved to your log
+2. Work through your exercises — tap segments of the set progress bar to mark individual sets complete
+3. For timed exercises, tap **Start** to begin the countdown timer — it auto-completes the set when it finishes
+4. Tap **Edit** on any exercise to adjust sets, reps, weight, or duration for this session — you'll be offered the option to update the routine defaults
+5. Tap **+ Add Exercise** to add something not in the routine
+6. When you're done, tap **Finish** — the session is saved to your log
 
 ### Viewing progress
 

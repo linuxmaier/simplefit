@@ -5,6 +5,7 @@ import * as drive from "./drive.js";
 
 let currentView = "home";
 let activeSession = null; // { session, exercises: [sessionExercise & exerciseName] }
+let activeTimer = null; // { exId, setNum, remaining, intervalId }
 
 const DRIVE_LAST_BACKUP_KEY = "driveLastBackup";
 
@@ -218,14 +219,20 @@ async function startWorkout(routineId) {
   });
 
   for (const [i, re] of routineExList.entries()) {
+    const masterEx = await db.exercises.get(re.exerciseId);
+    const type = masterEx?.type || "weight";
     await db.sessionExercises.save({
       sessionId,
       exerciseId: re.exerciseId,
       exerciseName: re.exerciseName,
+      type,
       sets: re.defaultSets,
-      reps: re.defaultReps,
+      reps: type === "weight" ? re.defaultReps : 0,
       weight: re.defaultWeight,
+      duration: type === "timed" ? (re.defaultDuration || 60) : null,
+      setsCompleted: 0,
       completed: false,
+      routineExerciseId: re.id,
       orderIndex: i,
     });
   }
@@ -238,7 +245,20 @@ async function loadActiveSession(sessionId) {
   const session = await db.sessions.get(sessionId);
   const exes = await db.sessionExercises.listForSession(sessionId);
   exes.sort((a, b) => a.orderIndex - b.orderIndex);
+  for (const ex of exes) {
+    normalizeSessionExercise(ex);
+  }
   return { session, exercises: exes };
+}
+
+function normalizeSessionExercise(se) {
+  if (se.setsCompleted === undefined) {
+    se.setsCompleted = se.completed ? se.sets : 0;
+  }
+  se.type = se.type || "weight";
+  se.duration = se.duration ?? null;
+  se.routineExerciseId = se.routineExerciseId ?? null;
+  se.completed = se.setsCompleted >= se.sets;
 }
 
 async function renderWorkout(el) {
@@ -248,12 +268,18 @@ async function renderWorkout(el) {
   }
 
   const exes = activeSession.exercises;
-  const done = exes.filter((e) => e.completed).length;
+  const done = exes.filter((e) => e.setsCompleted >= e.sets).length;
 
   const allExercises = await db.exercises.list();
   const notesById = Object.fromEntries(allExercises.map((e) => [e.id, e.notes || ""]));
 
+  const hasTimedExercises = exes.some((e) => (e.type || "weight") === "timed");
+  const notifBanner = hasTimedExercises && !notificationsEnabled()
+    ? "<div class=\"notif-banner\">Enable notifications in <a href=\"#\" onclick=\"app.navigate('settings');return false;\">Settings</a> to be alerted when sets complete.</div>"
+    : "";
+
   let html = `
+    ${notifBanner}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div>
         <div style="font-weight:700;font-size:1.05rem">${esc(activeSession.session.routineName || "Workout")}</div>
@@ -276,29 +302,58 @@ async function renderWorkout(el) {
 }
 
 function renderExRow(ex, notes = "") {
+  const type = ex.type || "weight";
+  const metaText = formatExMeta(ex);
+  const setBar = renderSetBar(ex);
+  const timerBtn = type === "timed"
+    ? (activeTimer && activeTimer.exId === ex.id
+      ? `<div class="timer-active" id="timer-${ex.id}">
+          <span class="timer-display" id="timer-display-${ex.id}">${formatDuration(activeTimer.remaining)}</span>
+          <button class="btn btn-danger btn-sm" onclick="app.stopTimer()">Stop</button>
+        </div>`
+      : `<button class="btn btn-ghost btn-sm" onclick="app.startTimer(${ex.id})">Start</button>`)
+    : "";
+
+  const editFields = type === "timed"
+    ? `<div class="field">
+        <label>Sets</label>
+        <input type="number" id="sets-${ex.id}" value="${ex.sets}" min="1">
+      </div>
+      <div class="field">
+        <label>Duration (sec)</label>
+        <input type="number" id="dur-${ex.id}" value="${ex.duration || 60}" min="1">
+      </div>
+      <div class="field">
+        <label>Weight (lbs)</label>
+        <input type="number" id="weight-${ex.id}" value="${ex.weight}" min="0" step="2.5">
+      </div>`
+    : `<div class="field">
+        <label>Sets</label>
+        <input type="number" id="sets-${ex.id}" value="${ex.sets}" min="1">
+      </div>
+      <div class="field">
+        <label>Reps</label>
+        <input type="number" id="reps-${ex.id}" value="${ex.reps}" min="1">
+      </div>
+      <div class="field">
+        <label>Weight (lbs)</label>
+        <input type="number" id="weight-${ex.id}" value="${ex.weight}" min="0" step="2.5">
+      </div>`;
+
   return `<div class="ex-row" id="ex-${ex.id}">
-    <button class="ex-check ${ex.completed ? "done" : ""}"
-      onclick="app.toggleExercise(${ex.id})">${ex.completed ? "✓" : ""}</button>
     <div>
       <div class="ex-name">${esc(ex.exerciseName)}</div>
-      <div class="ex-meta" id="meta-${ex.id}">${ex.sets}×${ex.reps} @ ${ex.weight} lbs</div>
+      <div class="ex-meta" id="meta-${ex.id}">${metaText}</div>
       ${notes ? `<div class="muted" style="font-size:.78rem;margin-top:2px">${esc(notes)}</div>` : ""}
     </div>
-    <button class="ex-edit-btn" onclick="app.toggleInlineEdit(${ex.id})">Edit</button>
+    <div class="ex-actions">
+      ${timerBtn}
+      <button class="ex-edit-btn" onclick="app.toggleInlineEdit(${ex.id})">Edit</button>
+    </div>
+    ${setBar}
   </div>
   <div class="inline-edit hidden" id="edit-${ex.id}">
-    <div class="field">
-      <label>Sets</label>
-      <input type="number" id="sets-${ex.id}" value="${ex.sets}" min="1">
-    </div>
-    <div class="field">
-      <label>Reps</label>
-      <input type="number" id="reps-${ex.id}" value="${ex.reps}" min="1">
-    </div>
-    <div class="field">
-      <label>Weight (lbs)</label>
-      <input type="number" id="weight-${ex.id}" value="${ex.weight}" min="0" step="2.5">
-    </div>
+    ${editFields}
     <div style="grid-column:1/-1;display:flex;gap:8px">
       <button class="btn btn-primary btn-sm" onclick="app.saveInlineEdit(${ex.id})">Save</button>
       <button class="btn btn-ghost btn-sm" onclick="app.toggleInlineEdit(${ex.id})">Cancel</button>
@@ -307,34 +362,107 @@ function renderExRow(ex, notes = "") {
   </div>`;
 }
 
+function formatExMeta(ex) {
+  const type = ex.type || "weight";
+  if (type === "timed") {
+    const dur = formatDuration(ex.duration || 0);
+    const weightPart = ex.weight ? ` @ ${ex.weight} lbs` : "";
+    return `${ex.sets} × ${dur}${weightPart}`;
+  }
+  return `${ex.sets}×${ex.reps} @ ${ex.weight} lbs`;
+}
+
+function renderSetBar(ex) {
+  let segs = "";
+  for (let i = 1; i <= ex.sets; i++) {
+    segs += `<button class="set-seg${i <= ex.setsCompleted ? " done" : ""}" onclick="app.tapSet(${ex.id}, ${i})"></button>`;
+  }
+  return `<div class="set-bar" id="setbar-${ex.id}">${segs}</div>`;
+}
+
+function formatDuration(seconds) {
+  if (!seconds || seconds <= 0) { return "0:00"; }
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function toggleInlineEdit(exId) {
   const el = document.getElementById(`edit-${exId}`);
   el.classList.toggle("hidden");
 }
 
-async function toggleExercise(exId) {
+async function tapSet(exId, setNum) {
   const ex = activeSession.exercises.find((e) => e.id === exId);
   if (!ex) { return; }
-  ex.completed = !ex.completed;
+  ex.setsCompleted = (setNum === ex.setsCompleted) ? setNum - 1 : setNum;
+  ex.completed = ex.setsCompleted >= ex.sets;
   await db.sessionExercises.save(ex);
 
-  // Re-render just this row
-  const row = document.getElementById(`ex-${exId}`);
-  const check = row.querySelector(".ex-check");
-  check.classList.toggle("done", ex.completed);
-  check.textContent = ex.completed ? "✓" : "";
+  // Update set bar segments
+  const bar = document.getElementById(`setbar-${exId}`);
+  if (bar) {
+    const segs = bar.querySelectorAll(".set-seg");
+    segs.forEach((seg, i) => seg.classList.toggle("done", i < ex.setsCompleted));
+  }
+
+  // Update header done count
+  updateWorkoutDoneCount();
+}
+
+function updateWorkoutDoneCount() {
+  if (!activeSession) { return; }
+  const exes = activeSession.exercises;
+  const done = exes.filter((e) => e.setsCompleted >= e.sets).length;
+  const counter = document.querySelector("#main .muted");
+  if (counter && counter.textContent.includes("exercises done")) {
+    counter.textContent = `${done}/${exes.length} exercises done`;
+  }
 }
 
 async function saveInlineEdit(exId) {
   const ex = activeSession.exercises.find((e) => e.id === exId);
   if (!ex) { return; }
+  const type = ex.type || "weight";
+  const oldSets = ex.sets;
   ex.sets   = parseInt(document.getElementById(`sets-${exId}`).value, 10) || ex.sets;
-  ex.reps   = parseInt(document.getElementById(`reps-${exId}`).value, 10) || ex.reps;
-  ex.weight = parseFloat(document.getElementById(`weight-${exId}`).value) || ex.weight;
+  if (type === "timed") {
+    ex.duration = parseInt(document.getElementById(`dur-${exId}`).value, 10) || ex.duration;
+  } else {
+    ex.reps = parseInt(document.getElementById(`reps-${exId}`).value, 10) || ex.reps;
+  }
+  ex.weight = parseFloat(document.getElementById(`weight-${exId}`).value) ?? ex.weight;
+  // Clamp setsCompleted if sets decreased
+  if (ex.setsCompleted > ex.sets) { ex.setsCompleted = ex.sets; }
+  ex.completed = ex.setsCompleted >= ex.sets;
   await db.sessionExercises.save(ex);
 
-  document.getElementById(`meta-${exId}`).textContent = `${ex.sets}×${ex.reps} @ ${ex.weight} lbs`;
+  document.getElementById(`meta-${exId}`).textContent = formatExMeta(ex);
+  // Re-render set bar if sets count changed
+  if (oldSets !== ex.sets) {
+    const bar = document.getElementById(`setbar-${exId}`);
+    if (bar) { bar.outerHTML = renderSetBar(ex); }
+  }
   toggleInlineEdit(exId);
+  updateWorkoutDoneCount();
+
+  // Offer to update routine defaults
+  if (ex.routineExerciseId) {
+    try {
+      const re = await db.routineExercises.get(ex.routineExerciseId);
+      if (re) {
+        const changed = type === "timed"
+          ? (ex.sets !== re.defaultSets || ex.duration !== (re.defaultDuration || 60) || ex.weight !== re.defaultWeight)
+          : (ex.sets !== re.defaultSets || ex.reps !== re.defaultReps || ex.weight !== re.defaultWeight);
+        if (changed) {
+          actionToast(
+            `Update routine defaults? <button class="btn btn-primary btn-sm" style="margin-left:8px" onclick="app.updateDefaults(${ex.id},${re.id})">Yes</button><button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="app.dismissToast()">No</button>`
+          );
+          return;
+        }
+      }
+    } catch { /* routine exercise may have been deleted */ }
+  }
   toast("Saved");
 }
 
@@ -347,11 +475,146 @@ async function removeFromSession(exId) {
   if (edit) { edit.remove(); }
 }
 
+// ─── Timer ──────────────────────────────────────────────────────────────────
+
+function startTimer(exId) {
+  const ex = activeSession.exercises.find((e) => e.id === exId);
+  if (!ex || !ex.duration) { return; }
+  // Cancel existing timer if any
+  if (activeTimer) { clearInterval(activeTimer.intervalId); }
+
+  const setNum = ex.setsCompleted + 1;
+  activeTimer = { exId, setNum, remaining: ex.duration, intervalId: null };
+
+  activeTimer.intervalId = setInterval(() => {
+    activeTimer.remaining--;
+    const display = document.getElementById(`timer-display-${exId}`);
+    if (display) { display.textContent = formatDuration(activeTimer.remaining); }
+    if (activeTimer.remaining <= 0) {
+      clearInterval(activeTimer.intervalId);
+      const completedSetNum = activeTimer.setNum;
+      activeTimer = null;
+      playAlert(ex.exerciseName);
+      tapSet(exId, completedSetNum);
+      // Re-render the timer area to show Start button again
+      const row = document.getElementById(`ex-${exId}`);
+      if (row) {
+        const actionsEl = row.querySelector(".ex-actions");
+        if (actionsEl) {
+          const btn = actionsEl.querySelector(".timer-active, .btn");
+          if (btn) {
+            const parent = btn.closest(".timer-active") || btn;
+            parent.outerHTML = `<button class="btn btn-ghost btn-sm" onclick="app.startTimer(${exId})">Start</button>`;
+          }
+        }
+      }
+    }
+  }, 1000);
+
+  // Update UI to show timer
+  const row = document.getElementById(`ex-${exId}`);
+  if (row) {
+    const actionsEl = row.querySelector(".ex-actions");
+    if (actionsEl) {
+      const startBtn = actionsEl.querySelector(".btn");
+      if (startBtn && startBtn.textContent.trim() === "Start") {
+        startBtn.outerHTML = `<div class="timer-active" id="timer-${exId}">
+          <span class="timer-display" id="timer-display-${exId}">${formatDuration(activeTimer.remaining)}</span>
+          <button class="btn btn-danger btn-sm" onclick="app.stopTimer()">Stop</button>
+        </div>`;
+      }
+    }
+  }
+}
+
+function stopTimer() {
+  if (!activeTimer) { return; }
+  const exId = activeTimer.exId;
+  clearInterval(activeTimer.intervalId);
+  activeTimer = null;
+  // Re-render timer area
+  const row = document.getElementById(`ex-${exId}`);
+  if (row) {
+    const timerEl = document.getElementById(`timer-${exId}`);
+    if (timerEl) {
+      timerEl.outerHTML = `<button class="btn btn-ghost btn-sm" onclick="app.startTimer(${exId})">Start</button>`;
+    }
+  }
+}
+
+function notificationsEnabled() {
+  return typeof Notification !== "undefined"
+    && Notification.permission === "granted"
+    && localStorage.getItem("notificationsEnabled") === "true";
+}
+
+async function requestNotificationPermission() {
+  if (typeof Notification === "undefined") {
+    toast("Notifications not supported in this browser");
+    return;
+  }
+  const result = await Notification.requestPermission();
+  if (result === "granted") {
+    localStorage.setItem("notificationsEnabled", "true");
+    toast("Notifications enabled");
+  } else {
+    localStorage.removeItem("notificationsEnabled");
+    toast("Notification permission denied");
+  }
+  navigate("settings");
+}
+
+function disableNotifications() {
+  localStorage.removeItem("notificationsEnabled");
+  toast("Notifications disabled");
+  navigate("settings");
+}
+
+function playAlert(exerciseName) {
+  if (navigator.vibrate) { navigator.vibrate([200, 100, 200]); }
+  if (notificationsEnabled()) {
+    new Notification("Set complete", {
+      body: exerciseName ? `${exerciseName} — time's up!` : "Timer finished",
+      icon: "./icon.svg",
+      silent: false,
+    });
+  }
+}
+
+// ─── Update routine defaults ────────────────────────────────────────────────
+
+async function updateDefaults(sessionExId, routineExId) {
+  try {
+    const ex = activeSession.exercises.find((e) => e.id === sessionExId);
+    const re = await db.routineExercises.get(routineExId);
+    if (!ex || !re) { toast("Error updating defaults"); return; }
+    re.defaultSets = ex.sets;
+    re.defaultWeight = ex.weight;
+    if ((ex.type || "weight") === "timed") {
+      re.defaultDuration = ex.duration;
+    } else {
+      re.defaultReps = ex.reps;
+    }
+    await db.routineExercises.save(re);
+    toast("Defaults updated");
+  } catch (err) {
+    toast("Error: " + err.message);
+  }
+}
+
+function dismissToast() {
+  const el = document.getElementById("toast");
+  el.classList.remove("show");
+  if (toastTimer) { clearTimeout(toastTimer); }
+}
+
 async function finishWorkout() {
   if (!activeSession) { return; }
   const total = activeSession.exercises.length;
-  const done  = activeSession.exercises.filter((e) => e.completed).length;
+  const done  = activeSession.exercises.filter((e) => e.setsCompleted >= e.sets).length;
   if (done < total && !confirm(`Only ${done}/${total} exercises completed. Finish anyway?`)) { return; }
+  // Clear any running timer
+  if (activeTimer) { clearInterval(activeTimer.intervalId); activeTimer = null; }
 
   activeSession.session.completedAt = new Date().toISOString();
   await db.sessions.save(activeSession.session);
@@ -376,17 +639,23 @@ async function finishWorkout() {
 function showAddExerciseToSession() {
   showExercisePicker(async (ex) => {
     const idx = activeSession.exercises.length;
+    const type = ex.type || "weight";
     const id = await db.sessionExercises.save({
       sessionId: activeSession.session.id,
       exerciseId: ex.id,
       exerciseName: ex.name,
+      type,
       sets: 3,
-      reps: 10,
+      reps: type === "weight" ? 10 : 0,
       weight: 0,
+      duration: type === "timed" ? 60 : null,
+      setsCompleted: 0,
       completed: false,
+      routineExerciseId: null,
       orderIndex: idx,
     });
     const saved = await db.sessionExercises.get(id);
+    normalizeSessionExercise(saved);
     activeSession.exercises.push(saved);
     const list = document.getElementById("ex-list");
     list.insertAdjacentHTML("beforeend", renderExRow(saved, ex.notes || ""));
@@ -417,6 +686,9 @@ async function renderRoutines(el) {
 
   let html = "<button class=\"btn btn-primary btn-full\" style=\"margin-bottom:16px\" onclick=\"app.showRoutineModal()\">+ New Routine</button>";
 
+  const allExercisesList = await db.exercises.list();
+  const exerciseTypeById = Object.fromEntries(allExercisesList.map((e) => [e.id, e.type || "weight"]));
+
   if (list.length === 0) {
     html += "<div class=\"empty\">No routines yet.</div>";
   } else {
@@ -438,11 +710,16 @@ async function renderRoutines(el) {
           <div style="margin-bottom:10px;border-top:1px solid var(--border)">
             ${exes.length === 0
     ? "<div class='muted' style='font-size:.85rem;padding:10px 0'>No exercises yet</div>"
-    : exes.map((e) => `<div style="border-bottom:1px solid var(--border)">
+    : exes.map((e) => {
+      const exType = exerciseTypeById[e.exerciseId] || "weight";
+      const meta = exType === "timed"
+        ? `${e.defaultSets} × ${formatDuration(e.defaultDuration || 60)}${e.defaultWeight ? ` @ ${e.defaultWeight} lbs` : ""}`
+        : `${e.defaultSets}×${e.defaultReps} @ ${e.defaultWeight} lbs`;
+      return `<div style="border-bottom:1px solid var(--border)">
                 <div style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;gap:8px">
                   <div>
                     <div>${esc(e.exerciseName)}</div>
-                    <div class="muted" style="font-size:.8rem">${e.defaultSets}×${e.defaultReps} @ ${e.defaultWeight} lbs</div>
+                    <div class="muted" style="font-size:.8rem">${meta}</div>
                   </div>
                   <button class="menu-btn" onclick="app.routineExerciseMenu(${e.id})">⋮</button>
                 </div>
@@ -450,7 +727,8 @@ async function renderRoutines(el) {
                   <button class="btn btn-ghost btn-sm" onclick="app.showRoutineExerciseModal(${e.id})">Edit defaults</button>
                   <button class="btn btn-danger btn-sm" onclick="app.removeRoutineExercise(${e.id})">Remove</button>
                 </div>
-              </div>`).join("")}
+              </div>`;
+    }).join("")}
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <button class="btn btn-ghost btn-sm" onclick="app.showAddExerciseToRoutine(${r.id})">+ Add Exercise</button>
@@ -466,8 +744,7 @@ async function renderRoutines(el) {
   }
 
   // Exercises section
-  const allExercises = await db.exercises.list();
-  allExercises.sort((a, b) => a.name.localeCompare(b.name));
+  const allExercises = allExercisesList.slice().sort((a, b) => a.name.localeCompare(b.name));
 
   html += `<div class="section-title">Exercises</div>
     <button class="btn btn-ghost btn-full" style="margin-bottom:12px" onclick="app.showExerciseModal()">+ New Exercise</button>`;
@@ -552,10 +829,18 @@ function showExerciseModal(exerciseId = null) {
   const backdrop = document.getElementById("modal-backdrop");
 
   (exerciseId ? db.exercises.get(exerciseId) : Promise.resolve(null)).then((e) => {
+    const type = e ? (e.type || "weight") : "weight";
     modal.innerHTML = `
       <div class="modal-title">${exerciseId ? "Edit Exercise" : "New Exercise"}</div>
       <div class="field"><label>Name</label><input type="text" id="m-ex-name" value="${esc(e ? e.name : "")}"></div>
       <div class="field"><label>Muscle group (optional)</label><input type="text" id="m-ex-muscle" value="${esc(e ? e.muscleGroup || "" : "")}"></div>
+      <div class="field">
+        <label>Type</label>
+        <select id="m-ex-type">
+          <option value="weight"${type === "weight" ? " selected" : ""}>Weight / Reps</option>
+          <option value="timed"${type === "timed" ? " selected" : ""}>Timed (duration)</option>
+        </select>
+      </div>
       <div class="field"><label>Notes (optional)</label><textarea id="m-ex-notes" placeholder="Form tips, cues, equipment notes…">${esc(e ? e.notes || "" : "")}</textarea></div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary" onclick="app.saveExercise()">Save</button>
@@ -569,9 +854,10 @@ async function saveExercise() {
   const name = document.getElementById("m-ex-name").value.trim();
   if (!name) { toast("Name required"); return; }
   const muscleGroup = document.getElementById("m-ex-muscle").value.trim();
+  const type = document.getElementById("m-ex-type").value;
   const notes = document.getElementById("m-ex-notes").value.trim();
   try {
-    const record = { name, muscleGroup, notes };
+    const record = { name, muscleGroup, type, notes };
     if (editingExerciseId) { record.id = editingExerciseId; }
     await db.exercises.save(record);
     closeModal();
@@ -596,7 +882,18 @@ function showRoutineExerciseModal(routineExerciseId) {
   const modal = document.getElementById("modal");
   const backdrop = document.getElementById("modal-backdrop");
 
-  db.routineExercises.get(routineExerciseId).then((re) => {
+  db.routineExercises.get(routineExerciseId).then(async (re) => {
+    const masterEx = await db.exercises.get(re.exerciseId);
+    const type = masterEx?.type || "weight";
+    const midField = type === "timed"
+      ? `<div class="field">
+          <label>Duration (sec)</label>
+          <input type="number" id="m-re-dur" value="${re.defaultDuration || 60}" min="1">
+        </div>`
+      : `<div class="field">
+          <label>Reps</label>
+          <input type="number" id="m-re-reps" value="${re.defaultReps}" min="1">
+        </div>`;
     modal.innerHTML = `
       <div class="modal-title">${esc(re.exerciseName)}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
@@ -604,10 +901,7 @@ function showRoutineExerciseModal(routineExerciseId) {
           <label>Sets</label>
           <input type="number" id="m-re-sets" value="${re.defaultSets}" min="1">
         </div>
-        <div class="field">
-          <label>Reps</label>
-          <input type="number" id="m-re-reps" value="${re.defaultReps}" min="1">
-        </div>
+        ${midField}
         <div class="field">
           <label>Weight (lbs)</label>
           <input type="number" id="m-re-weight" value="${re.defaultWeight}" min="0" step="2.5">
@@ -625,7 +919,14 @@ async function saveRoutineExercise(routineExerciseId) {
   try {
     const re = await db.routineExercises.get(routineExerciseId);
     re.defaultSets   = parseInt(document.getElementById("m-re-sets").value, 10)   || re.defaultSets;
-    re.defaultReps   = parseInt(document.getElementById("m-re-reps").value, 10)   || re.defaultReps;
+    const durEl = document.getElementById("m-re-dur");
+    const repsEl = document.getElementById("m-re-reps");
+    if (durEl) {
+      re.defaultDuration = parseInt(durEl.value, 10) || re.defaultDuration || 60;
+    }
+    if (repsEl) {
+      re.defaultReps = parseInt(repsEl.value, 10) || re.defaultReps;
+    }
     re.defaultWeight = parseFloat(document.getElementById("m-re-weight").value)    ?? re.defaultWeight;
     await db.routineExercises.save(re);
     closeModal();
@@ -677,6 +978,16 @@ function showAddExerciseToRoutine(routineId) {
 function showAddExerciseDefaults(routineId, ex) {
   const modal = document.getElementById("modal");
   const backdrop = document.getElementById("modal-backdrop");
+  const type = ex.type || "weight";
+  const midField = type === "timed"
+    ? `<div class="field">
+        <label>Duration (sec)</label>
+        <input type="number" id="m-add-dur" value="60" min="1">
+      </div>`
+    : `<div class="field">
+        <label>Reps</label>
+        <input type="number" id="m-add-reps" value="10" min="1">
+      </div>`;
 
   modal.innerHTML = `
     <div class="modal-title">${esc(ex.name)}</div>
@@ -686,10 +997,7 @@ function showAddExerciseDefaults(routineId, ex) {
         <label>Sets</label>
         <input type="number" id="m-add-sets" value="3" min="1">
       </div>
-      <div class="field">
-        <label>Reps</label>
-        <input type="number" id="m-add-reps" value="10" min="1">
-      </div>
+      ${midField}
       <div class="field">
         <label>Weight (lbs)</label>
         <input type="number" id="m-add-weight" value="0" min="0" step="2.5">
@@ -705,15 +1013,19 @@ function showAddExerciseDefaults(routineId, ex) {
 async function confirmAddExerciseToRoutine(routineId, exerciseId, exerciseName) {
   try {
     const existing = await db.routineExercises.listForRoutine(routineId);
-    await db.routineExercises.save({
+    const durEl = document.getElementById("m-add-dur");
+    const repsEl = document.getElementById("m-add-reps");
+    const record = {
       routineId,
       exerciseId,
       exerciseName,
       defaultSets:   parseInt(document.getElementById("m-add-sets").value, 10)   || 3,
-      defaultReps:   parseInt(document.getElementById("m-add-reps").value, 10)   || 10,
+      defaultReps:   repsEl ? (parseInt(repsEl.value, 10) || 10) : 0,
       defaultWeight: parseFloat(document.getElementById("m-add-weight").value)   || 0,
+      defaultDuration: durEl ? (parseInt(durEl.value, 10) || 60) : null,
       orderIndex: existing.length,
-    });
+    };
+    await db.routineExercises.save(record);
     closeModal();
     navigate("routines");
   } catch (err) {
@@ -846,13 +1158,18 @@ async function viewSession(sessionId) {
   modal.innerHTML = `
     <div class="modal-title">${esc(session.routineName || "Workout")}</div>
     <div class="muted" style="margin-bottom:16px">${date}</div>
-    ${exes.map((e) => `<div class="session-row">
+    ${exes.map((e) => {
+    const meta = (e.type || "weight") === "timed"
+      ? `${e.sets} × ${formatDuration(e.duration || 0)}${e.weight ? ` @ ${e.weight} lbs` : ""}`
+      : `${e.sets}×${e.reps} @ ${e.weight} lbs`;
+    return `<div class="session-row">
       <div>
         <div style="font-weight:600">${esc(e.exerciseName)}</div>
-        <div class="muted" style="font-size:.85rem">${e.sets}×${e.reps} @ ${e.weight} lbs</div>
+        <div class="muted" style="font-size:.85rem">${meta}</div>
       </div>
       ${e.completed ? "<span class='success-text'>✓</span>" : "<span class='muted'>–</span>"}
-    </div>`).join("")}
+    </div>`;
+  }).join("")}
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-ghost btn-sm" onclick="app.closeModal()">Close</button>
       <button class="btn btn-ghost btn-sm" onclick="app.closeModal();app.navigateEditSession(${sessionId})">Edit</button>
@@ -898,6 +1215,16 @@ async function renderEditSession(el) {
     </div>`;
 
   for (const ex of exes) {
+    const exType = ex.type || "weight";
+    const midField = exType === "timed"
+      ? `<div class="field">
+          <label>Duration (sec)</label>
+          <input type="number" id="se-dur-${ex.id}" value="${ex.duration || 60}" min="1">
+        </div>`
+      : `<div class="field">
+          <label>Reps</label>
+          <input type="number" id="se-reps-${ex.id}" value="${ex.reps}" min="1">
+        </div>`;
     html += `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div style="font-weight:600">${esc(ex.exerciseName)}</div>
@@ -909,10 +1236,7 @@ async function renderEditSession(el) {
           <label>Sets</label>
           <input type="number" id="se-sets-${ex.id}" value="${ex.sets}" min="1">
         </div>
-        <div class="field">
-          <label>Reps</label>
-          <input type="number" id="se-reps-${ex.id}" value="${ex.reps}" min="1">
-        </div>
+        ${midField}
         <div class="field">
           <label>Weight (lbs)</label>
           <input type="number" id="se-weight-${ex.id}" value="${ex.weight}" min="0" step="2.5">
@@ -942,7 +1266,10 @@ async function saveSessionExerciseEdit(seId) {
   try {
     const se = await db.sessionExercises.get(seId);
     se.sets   = parseInt(document.getElementById(`se-sets-${seId}`).value, 10)   || se.sets;
-    se.reps   = parseInt(document.getElementById(`se-reps-${seId}`).value, 10)   || se.reps;
+    const durEl = document.getElementById(`se-dur-${seId}`);
+    const repsEl = document.getElementById(`se-reps-${seId}`);
+    if (durEl) { se.duration = parseInt(durEl.value, 10) || se.duration; }
+    if (repsEl) { se.reps = parseInt(repsEl.value, 10) || se.reps; }
     se.weight = parseFloat(document.getElementById(`se-weight-${seId}`).value)   ?? se.weight;
     await db.sessionExercises.save(se);
     toast("Saved");
@@ -993,9 +1320,13 @@ async function renderExerciseHistory(el) {
     const date = new Date(se.completedAt).toLocaleDateString("en-US", {
       month: "short", day: "numeric",
     });
+    const seType = se.type || "weight";
+    const meta = seType === "timed"
+      ? `${se.sets} × ${formatDuration(se.duration || 0)}${se.weight ? ` @ <strong>${se.weight} lbs</strong>` : ""}`
+      : `${se.sets}×${se.reps} @ <strong>${se.weight} lbs</strong>`;
     html += `<div class="session-row">
       <span class="muted">${date}</span>
-      <span>${se.sets}×${se.reps} @ <strong>${se.weight} lbs</strong></span>
+      <span>${meta}</span>
     </div>`;
   }
   html += "</div>";
@@ -1106,7 +1437,29 @@ async function renderSettings(el) {
     ? new Date(lastBackup).toLocaleString()
     : "Never";
 
+  const notifSupported = typeof Notification !== "undefined";
+  const notifPermission = notifSupported ? Notification.permission : "unsupported";
+  const notifOn = notificationsEnabled();
+
+  let notifCard;
+  if (!notifSupported) {
+    notifCard = "<div class=\"muted\" style=\"font-size:.85rem\">Notifications are not supported in this browser.</div>";
+  } else if (notifPermission === "denied") {
+    notifCard = "<div class=\"muted\" style=\"font-size:.85rem\">Notification permission was denied. To enable, update site permissions in your browser settings.</div>";
+  } else if (notifOn) {
+    notifCard = `
+      <div style="font-size:.9rem;margin-bottom:12px">Notifications are <strong>enabled</strong>. You'll receive an alert when a timed set completes.</div>
+      <button class="btn btn-ghost btn-sm" onclick="app.disableNotifications()">Disable Notifications</button>`;
+  } else {
+    notifCard = `
+      <div style="font-size:.9rem;margin-bottom:12px">Enable notifications to be alerted when a timed set completes — even if the screen is off.</div>
+      <button class="btn btn-primary btn-sm" onclick="app.requestNotificationPermission()">Enable Notifications</button>`;
+  }
+
   el.innerHTML = `
+    <div class="section-title">Notifications</div>
+    <div class="card">${notifCard}</div>
+
     <div class="section-title">Google Drive Backup</div>
     <div class="card">
       <div class="field">
@@ -1305,8 +1658,18 @@ function toast(msg) {
   const el = document.getElementById("toast");
   el.textContent = msg;
   el.classList.add("show");
+  el.style.pointerEvents = "none";
   if (toastTimer) { clearTimeout(toastTimer); }
   toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
+}
+
+function actionToast(html) {
+  const el = document.getElementById("toast");
+  el.innerHTML = html;
+  el.classList.add("show");
+  el.style.pointerEvents = "auto";
+  if (toastTimer) { clearTimeout(toastTimer); }
+  toastTimer = setTimeout(() => { el.classList.remove("show"); el.style.pointerEvents = "none"; }, 6000);
 }
 
 // ─── Expose to HTML ───────────────────────────────────────────────────────────
@@ -1316,11 +1679,15 @@ window.app = {
   toggleTheme,
   startWorkout,
   finishWorkout,
-  toggleExercise,
+  tapSet,
   toggleInlineEdit,
   saveInlineEdit,
   removeFromSession,
   showAddExerciseToSession,
+  startTimer,
+  stopTimer,
+  updateDefaults,
+  dismissToast,
   toggleRoutine,
   routineMenu,
   routineExerciseMenu,
@@ -1346,6 +1713,8 @@ window.app = {
   toggleSessionExercise,
   saveSessionExerciseEdit,
   showExerciseHistory,
+  requestNotificationPermission,
+  disableNotifications,
   saveClientId,
   driveSignIn,
   reconnectDrive,
