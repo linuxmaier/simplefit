@@ -1,4 +1,4 @@
-const CACHE = "exercise-tracker-v3";
+const CACHE = "simplefit-v4";
 const ASSETS = [
   "./",
   "./index.html",

@@ -1,11 +1,14 @@
-# Agent Guide — Simple Exercise
+# Agent Guide — SimpleFit
 
 > **Note:** `CLAUDE.md` is a symlink to this file (`AGENTS.md`). All edits should be made directly to `AGENTS.md`.
 
 ## Project overview
 
-A mobile-first PWA exercise tracker hosted on GitHub Pages. No build step — vanilla ES modules served directly from `public/`. IndexedDB for local storage, Google Drive (appDataFolder) for cloud backup.
+A mobile-first PWA personal health tracker hosted on GitHub Pages. No build step — vanilla ES modules served directly from `public/`. IndexedDB for local storage, Google Drive (appDataFolder) for cloud backup.
 
+The app is organized into three **modes** (Exercise, Nutrition, Health), selected via a persistent segmented control in the header. Exercise and Health are live; Nutrition is a placeholder.
+
+- **App name:** SimpleFit (user-facing) — the repo and URL still use `simple-exercise`.
 - **Live URL:** `https://linuxmaier.github.io/simple-exercise/`
 - **Repo:** `git@github.com:linuxmaier/simple-exercise.git`
 
@@ -19,7 +22,7 @@ public/
   drive.js        Google Drive integration (GIS implicit OAuth flow)
   style.css       Light/cream mobile-first theme with dark mode (CSS custom properties)
   sw.js           Service worker — offline cache
-  manifest.json   PWA manifest (name: "Simple Exercise", short_name: "Exercise")
+  manifest.json   PWA manifest (name: "SimpleFit")
   icon.svg        Dumbbell SVG icon on indigo background
 eslint.config.js  ESLint 9 flat config (browser globals, double quotes, semi, 2-space indent)
 package.json      npm scripts: lint, lint:fix
@@ -40,23 +43,33 @@ All `public/` files are served verbatim by GitHub Pages. **Use relative paths ev
 ### `window.app` — inline onclick handlers
 Because views are built with HTML strings containing `onclick="app.foo()"`, all callable functions must be exported on `window.app` at the bottom of `app.js`. If you add a new function that is called from inline HTML, add it to the `window.app` object.
 
-### Views (currentView state)
-| Value | Header | Render function |
-|---|---|---|
-| `home` | Workout | `renderHome` |
-| `workout` | Active | `renderWorkout` |
-| `routines` | Routines | `renderRoutines` |
-| `log` | History | `renderLog` |
-| `settings` | Settings | `renderSettings` |
-| `exercise-history` | Progress | `renderExerciseHistory` |
-| `edit-session` | Edit Workout | `renderEditSession` |
+### Modes
+Top-level mode is tracked in `currentMode` (module scope) and persisted in `localStorage["currentMode"]`. The header shows a segmented control (`#mode-switcher` → `renderModeSwitcher()`) that switches modes via `setMode(mode)`. Each mode has its own bottom-nav tab set returned by `tabsForMode(mode)`. `Settings` is a shared tab available in every mode.
 
-Navigate with `navigate(viewName)` — sets `currentView`, re-renders nav and view.
+Modes: `"exercise"` (default), `"health"`, `"nutrition"` (placeholder only — no DB stores).
+
+### Views (currentView state)
+| Mode | Value | Render function |
+|---|---|---|
+| exercise | `home` | `renderHome` |
+| exercise | `workout` | `renderWorkout` |
+| exercise | `routines` | `renderRoutines` |
+| exercise | `log` | `renderLog` |
+| exercise | `exercise-history` | `renderExerciseHistory` |
+| exercise | `edit-session` | `renderEditSession` |
+| health | `health-today` | `renderHealthToday` |
+| health | `health-metrics` | `renderHealthMetrics` |
+| health | `health-metric` | `renderHealthMetricDetail` |
+| nutrition | `nutrition-home` | `renderNutritionHome` |
+| all | `settings` | `renderSettings` |
+
+Navigate with `navigate(viewName)` — sets `currentView`, re-renders mode switcher, nav and view. The page-title `<h1>` has been replaced by the mode switcher; views render their own section titles in-body.
 
 ## Data model (IndexedDB)
 
-DB name: `exercise-tracker`, version 1. All stores use `{ keyPath: "id", autoIncrement: true }`.
+DB name: `exercise-tracker`, version 2. All stores use `{ keyPath: "id", autoIncrement: true }`. The `onupgradeneeded` handler uses `objectStoreNames.contains()` guards so existing data survives v1→v2 upgrades.
 
+### v1 (Exercise) stores
 | Store | Key fields | Notes |
 |---|---|---|
 | `routines` | id, name, notes, updatedAt | |
@@ -64,6 +77,14 @@ DB name: `exercise-tracker`, version 1. All stores use `{ keyPath: "id", autoInc
 | `routineExercises` | id, routineId, exerciseId, exerciseName, defaultSets, defaultReps, defaultWeight, defaultDuration | join table; `defaultDuration` (seconds) used for timed exercises |
 | `sessions` | id, routineId, routineName, date, completedAt | open session has no `completedAt` |
 | `sessionExercises` | id, sessionId, exerciseId, exerciseName, type, sets, reps, weight, duration, setsCompleted, completed, routineExerciseId | `setsCompleted` tracks per-set progress (0..sets); `duration` in seconds for timed exercises; `routineExerciseId` links back to routine defaults (null for ad-hoc) |
+
+### v2 (Health) stores
+| Store | Key fields | Notes |
+|---|---|---|
+| `healthMetrics` | id, name, kind, unit, builtin, updatedAt | unique index on `name`; `kind` is `"numeric"` / `"dual"` / `"duration"`; `builtin: true` means seeded (Blood Pressure, Weight, Sleep) and cannot be deleted |
+| `healthReadings` | id, metricId, date (YYYY-MM-DD), recordedAt (ISO), value OR valueSystolic/valueDiastolic, notes, source, externalId | `source: "manual"` today; `externalId` reserved for future device ingestion dedup; pick `value` for numeric/duration metrics, `valueSystolic` + `valueDiastolic` for `dual` |
+
+On first entry into Health mode, `ensureHealthSeeded()` inserts the three built-in metrics if the store is empty. Built-ins can be renamed (on non-built-ins only — built-in name is read-only in the edit modal) and their unit/kind edited, but cannot be deleted.
 
 **Critical:** Never pass `id: undefined` to `db.*.save()` — IDB throws a DataError. Omit the `id` field entirely for new records: `{ name: "foo" }` not `{ id: undefined, name: "foo" }`.
 
@@ -92,9 +113,22 @@ db.sessionExercises.listForExercise(exerciseId)
 db.sessionExercises.save(record)
 db.sessionExercises.delete(id)
 
-db.exportAll()   // → full backup object
+db.healthMetrics.list()
+db.healthMetrics.get(id)
+db.healthMetrics.save(record)
+db.healthMetrics.delete(id)
+
+db.healthReadings.list()
+db.healthReadings.listForMetric(metricId)
+db.healthReadings.get(id)
+db.healthReadings.save(record)
+db.healthReadings.delete(id)
+
+db.exportAll()   // → full backup object (all v1 + v2 stores)
 db.importAll(data)  // clears all stores, then restores
 ```
+
+**When adding new stores:** update both `exportAll()` and `importAll()` in `db.js` — the store list in each is hardcoded and new stores will silently be excluded from backups otherwise.
 
 ## Drive integration (drive.js)
 

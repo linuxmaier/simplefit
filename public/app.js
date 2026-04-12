@@ -3,11 +3,66 @@ import * as drive from "./drive.js";
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
+let currentMode = "exercise"; // "exercise" | "nutrition" | "health"
 let currentView = "home";
 let activeSession = null; // { session, exercises: [sessionExercise & exerciseName] }
 let activeTimer = null; // { exId, setNum, remaining, intervalId }
+let viewingMetricId = null; // active metric in health-metric detail view
 
 const DRIVE_LAST_BACKUP_KEY = "driveLastBackup";
+const CURRENT_MODE_KEY = "currentMode";
+
+// ─── Modes ───────────────────────────────────────────────────────────────────
+
+const MODES = [
+  { id: "exercise",  label: "Exercise"  },
+  { id: "nutrition", label: "Nutrition" },
+  { id: "health",    label: "Health"    },
+];
+
+function tabsForMode(mode) {
+  switch (mode) {
+  case "exercise":
+    return [
+      { id: "home",     icon: "home",      label: "Home" },
+      { id: "routines", icon: "dumbbell",  label: "Routines" },
+      { id: "log",      icon: "history",   label: "Log" },
+      { id: "settings", icon: "settings",  label: "Settings" },
+    ];
+  case "health":
+    return [
+      { id: "health-today",   icon: "heart-pulse", label: "Today" },
+      { id: "health-metrics", icon: "activity",    label: "Metrics" },
+      { id: "settings",       icon: "settings",    label: "Settings" },
+    ];
+  case "nutrition":
+    return [
+      { id: "nutrition-home", icon: "utensils", label: "Food" },
+      { id: "settings",       icon: "settings", label: "Settings" },
+    ];
+  default:
+    return [];
+  }
+}
+
+function defaultViewForMode(mode) {
+  return tabsForMode(mode)[0].id;
+}
+
+function setMode(mode) {
+  if (mode === currentMode) { return; }
+  currentMode = mode;
+  localStorage.setItem(CURRENT_MODE_KEY, mode);
+  navigate(defaultViewForMode(mode));
+}
+
+function renderModeSwitcher() {
+  const host = document.getElementById("mode-switcher");
+  if (!host) { return; }
+  host.innerHTML = MODES.map((m) => `
+    <button class="seg-btn ${currentMode === m.id ? "active" : ""}" role="tab" aria-selected="${currentMode === m.id}" onclick="app.setMode('${m.id}')">${m.label}</button>
+  `).join("");
+}
 
 // ─── Boot ────────────────────────────────────────────────────────────────────
 
@@ -16,6 +71,12 @@ async function boot() {
   const savedTheme = localStorage.getItem("appTheme") || "light";
   if (savedTheme === "dark") {
     document.documentElement.dataset.theme = "dark";
+  }
+
+  // Restore last-used mode
+  const savedMode = localStorage.getItem(CURRENT_MODE_KEY);
+  if (savedMode && MODES.some((m) => m.id === savedMode)) {
+    currentMode = savedMode;
   }
 
   await db.openDB();
@@ -71,27 +132,24 @@ async function boot() {
     await checkDriveOnOpen();
   }
 
+  renderModeSwitcher();
   renderNav();
   renderHeaderIcons();
-  navigate("home");
+  navigate(defaultViewForMode(currentMode));
 }
 
 // ─── Navigation ──────────────────────────────────────────────────────────────
 
 function navigate(view) {
   currentView = view;
+  renderModeSwitcher();
   renderNav();
   renderHeaderIcons();
   renderView();
 }
 
 function renderNav() {
-  const tabs = [
-    { id: "home",     icon: "home",         label: "Home" },
-    { id: "routines", icon: "dumbbell",      label: "Routines" },
-    { id: "log",      icon: "history",       label: "Log" },
-    { id: "settings", icon: "settings",      label: "Settings" },
-  ];
+  const tabs = tabsForMode(currentMode);
 
   document.getElementById("nav").innerHTML = tabs
     .map(
@@ -139,16 +197,19 @@ function toggleTheme() {
 
 function renderView() {
   const main = document.getElementById("main");
-  const hdr  = document.getElementById("page-title");
 
   switch (currentView) {
-  case "home":     hdr.textContent = "Workout";   renderHome(main);     break;
-  case "workout":  hdr.textContent = "Active";    renderWorkout(main);  break;
-  case "routines": hdr.textContent = "Routines";  renderRoutines(main); break;
-  case "log":      hdr.textContent = "History";   renderLog(main);      break;
-  case "settings": hdr.textContent = "Settings";  renderSettings(main); break;
-  case "exercise-history": hdr.textContent = "Progress";    renderExerciseHistory(main); break;
-  case "edit-session":     hdr.textContent = "Edit Workout"; renderEditSession(main);     break;
+  case "home":             renderHome(main);              break;
+  case "workout":          renderWorkout(main);           break;
+  case "routines":         renderRoutines(main);          break;
+  case "log":              renderLog(main);               break;
+  case "settings":         renderSettings(main);          break;
+  case "exercise-history": renderExerciseHistory(main);   break;
+  case "edit-session":     renderEditSession(main);       break;
+  case "health-today":     renderHealthToday(main);       break;
+  case "health-metrics":   renderHealthMetrics(main);     break;
+  case "health-metric":    renderHealthMetricDetail(main); break;
+  case "nutrition-home":   renderNutritionHome(main);     break;
   }
 }
 
@@ -1457,34 +1518,45 @@ async function renderSettings(el) {
   }
 
   el.innerHTML = `
-    <div class="section-title">Notifications</div>
-    <div class="card">${notifCard}</div>
+    <div class="settings-section">
+      <div class="section-title">App · Google Drive Backup</div>
+      <div class="card">
+        <div class="field">
+          <label>Google OAuth Client ID</label>
+          <input type="text" id="client-id-input" value="${esc(savedId)}" placeholder="123....apps.googleusercontent.com">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="app.saveClientId()">Save Client ID</button>
 
-    <div class="section-title">Google Drive Backup</div>
-    <div class="card">
-      <div class="field">
-        <label>Google OAuth Client ID</label>
-        <input type="text" id="client-id-input" value="${esc(savedId)}" placeholder="123....apps.googleusercontent.com">
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="app.saveClientId()">Save Client ID</button>
-
-      <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-        ${signedIn
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+          ${signedIn
     ? "<button class=\"btn btn-ghost btn-sm\" onclick=\"app.driveSignOut()\">Sign Out of Google</button>"
     : "<button class=\"btn btn-primary btn-sm\" onclick=\"app.driveSignIn()\">Sign in to Google</button>"}
-        <button class="btn btn-green btn-sm" onclick="app.driveBackup()" ${signedIn ? "" : "disabled"}>Backup Now</button>
-        <button class="btn btn-ghost btn-sm" onclick="app.driveRestore()" ${signedIn ? "" : "disabled"}>Restore from Drive</button>
+          <button class="btn btn-green btn-sm" onclick="app.driveBackup()" ${signedIn ? "" : "disabled"}>Backup Now</button>
+          <button class="btn btn-ghost btn-sm" onclick="app.driveRestore()" ${signedIn ? "" : "disabled"}>Restore from Drive</button>
+        </div>
+        <div class="muted" style="font-size:.85rem;margin-top:12px">Last backup: ${lastBackupStr}</div>
       </div>
-      <div class="muted" style="font-size:.85rem;margin-top:12px">Last backup: ${lastBackupStr}</div>
+
+      <div class="section-title">App · Local Backup</div>
+      <div class="card">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="app.exportJSON()">Download JSON</button>
+          <button class="btn btn-ghost btn-sm" onclick="app.triggerImport()">Import JSON</button>
+        </div>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="app.importJSON(this)">
+      </div>
     </div>
 
-    <div class="section-title">Local Backup</div>
-    <div class="card">
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-ghost btn-sm" onclick="app.exportJSON()">Download JSON</button>
-        <button class="btn btn-ghost btn-sm" onclick="app.triggerImport()">Import JSON</button>
+    <div class="settings-section">
+      <div class="section-title">Exercise · Notifications</div>
+      <div class="card">${notifCard}</div>
+    </div>
+
+    <div class="settings-section">
+      <div class="section-title">Health</div>
+      <div class="card">
+        <div class="muted" style="font-size:.9rem">Manage metrics and add readings from the Metrics and Today tabs in Health mode.</div>
       </div>
-      <input type="file" id="import-file" accept=".json" style="display:none" onchange="app.importJSON(this)">
     </div>`;
 }
 
@@ -1517,7 +1589,7 @@ async function reconnectDrive() {
     await drive.signIn();
     localStorage.removeItem("driveReconnectNeeded");
     await checkDriveOnOpen();
-    navigate("home");
+    navigate(defaultViewForMode(currentMode));
   } catch (err) {
     toast("Reconnect failed: " + err.message);
   }
@@ -1592,7 +1664,7 @@ async function driveRestore() {
     localStorage.setItem(DRIVE_LAST_BACKUP_KEY, new Date().toISOString());
     activeSession = null;
     toast("Restored from Drive");
-    navigate("home");
+    navigate(defaultViewForMode(currentMode));
   } catch (err) {
     toast("Restore failed: " + err.message);
   }
@@ -1623,7 +1695,7 @@ async function importJSON(input) {
     await db.importAll(data);
     activeSession = null;
     toast("Data imported");
-    navigate("home");
+    navigate(defaultViewForMode(currentMode));
   } catch (err) {
     toast("Import failed: " + err.message);
   }
@@ -1672,10 +1744,443 @@ function actionToast(html) {
   toastTimer = setTimeout(() => { el.classList.remove("show"); el.style.pointerEvents = "none"; }, 6000);
 }
 
+// ─── Health mode ─────────────────────────────────────────────────────────────
+
+const BUILTIN_METRICS = [
+  { name: "Blood Pressure", kind: "dual",     unit: "mmHg", builtin: true },
+  { name: "Weight",         kind: "numeric",  unit: "lb",   builtin: true },
+  { name: "Sleep",          kind: "duration", unit: "hr",   builtin: true },
+];
+
+async function ensureHealthSeeded() {
+  const existing = await db.healthMetrics.list();
+  if (existing.length > 0) { return; }
+  for (const m of BUILTIN_METRICS) {
+    await db.healthMetrics.save({ ...m });
+  }
+}
+
+function todayISODate() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatReadingValue(reading, metric) {
+  if (metric.kind === "dual") {
+    return `${reading.valueSystolic}/${reading.valueDiastolic}`;
+  }
+  return String(reading.value);
+}
+
+function formatDateLabel(isoDate) {
+  if (!isoDate) { return ""; }
+  const today = todayISODate();
+  if (isoDate === today) { return "Today"; }
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const yyyy = y.getFullYear();
+  const mm = String(y.getMonth() + 1).padStart(2, "0");
+  const dd = String(y.getDate()).padStart(2, "0");
+  if (isoDate === `${yyyy}-${mm}-${dd}`) { return "Yesterday"; }
+  // Show as "Apr 12" for recent, "Apr 12, 2025" otherwise
+  const [yr, mo, day] = isoDate.split("-").map(Number);
+  const dt = new Date(yr, mo - 1, day);
+  const thisYear = new Date().getFullYear();
+  const opts = yr === thisYear
+    ? { month: "short", day: "numeric" }
+    : { month: "short", day: "numeric", year: "numeric" };
+  return dt.toLocaleDateString(undefined, opts);
+}
+
+function sortReadings(readings) {
+  // Newest first by date; tiebreak by recordedAt or id
+  return [...readings].sort((a, b) => {
+    if (a.date !== b.date) { return a.date < b.date ? 1 : -1; }
+    const at = a.recordedAt || "";
+    const bt = b.recordedAt || "";
+    if (at !== bt) { return at < bt ? 1 : -1; }
+    return (b.id || 0) - (a.id || 0);
+  });
+}
+
+async function renderHealthToday(el) {
+  await ensureHealthSeeded();
+  const metrics = await db.healthMetrics.list();
+  metrics.sort((a, b) => (a.id || 0) - (b.id || 0));
+
+  if (metrics.length === 0) {
+    el.innerHTML = "<div class=\"empty\">No metrics yet. Add one in the Metrics tab.</div>";
+    return;
+  }
+
+  const allReadings = await db.healthReadings.list();
+  const byMetric = new Map();
+  for (const r of allReadings) {
+    if (!byMetric.has(r.metricId)) { byMetric.set(r.metricId, []); }
+    byMetric.get(r.metricId).push(r);
+  }
+
+  let html = "<div class=\"section-title\">Today</div>";
+  for (const m of metrics) {
+    const readings = sortReadings(byMetric.get(m.id) || []);
+    const latest = readings[0];
+    const recent = readings.slice(1, 4);
+
+    html += `
+      <div class="card">
+        <div class="metric-card-head">
+          <button class="metric-name" onclick="app.viewMetric(${m.id})">${esc(m.name)}</button>
+          <button class="btn btn-primary btn-sm" onclick="app.addReading(${m.id})">+ Add</button>
+        </div>
+        ${latest ? `
+          <div class="metric-latest">${formatReadingValue(latest, m)} <span style="font-size:.85rem;color:var(--muted);font-weight:400">${esc(m.unit)}</span></div>
+          <div class="metric-latest-meta">${formatDateLabel(latest.date)}${latest.notes ? " · " + esc(latest.notes) : ""}</div>
+        ` : "<div class=\"muted\" style=\"font-size:.9rem;margin:8px 0 4px\">No readings yet.</div>"}
+        ${recent.length > 0 ? `
+          <div style="margin-top:8px">
+            ${recent.map((r) => `
+              <div class="reading-row">
+                <span class="reading-value">${formatReadingValue(r, m)} <span class="muted" style="font-weight:400">${esc(m.unit)}</span></span>
+                <span class="reading-date">${formatDateLabel(r.date)}</span>
+              </div>
+            `).join("")}
+          </div>
+        ` : ""}
+      </div>
+    `;
+  }
+
+  el.innerHTML = html;
+  if (window.lucide) { lucide.createIcons(); }
+}
+
+async function renderHealthMetrics(el) {
+  await ensureHealthSeeded();
+  const metrics = await db.healthMetrics.list();
+  metrics.sort((a, b) => (a.id || 0) - (b.id || 0));
+  const allReadings = await db.healthReadings.list();
+  const counts = new Map();
+  for (const r of allReadings) {
+    counts.set(r.metricId, (counts.get(r.metricId) || 0) + 1);
+  }
+
+  let html = `
+    <div class="section-title">Metrics</div>
+    <div class="card">
+      <button class="btn btn-primary btn-sm btn-full" onclick="app.showMetricModal()">+ New Metric</button>
+    </div>
+  `;
+
+  for (const m of metrics) {
+    const count = counts.get(m.id) || 0;
+    html += `
+      <div class="card">
+        <div class="metric-card-head">
+          <div>
+            <div class="card-title" style="margin-bottom:2px">${esc(m.name)}</div>
+            <div class="muted" style="font-size:.8rem">${esc(m.kind)} · ${esc(m.unit)} · ${count} reading${count === 1 ? "" : "s"}${m.builtin ? " · built-in" : ""}</div>
+          </div>
+          <button class="menu-btn" onclick="app.metricMenu(${m.id})">⋮</button>
+        </div>
+        <div class="inline-actions hidden" id="menu-metric-${m.id}">
+          <button class="btn btn-ghost btn-sm" onclick="app.showMetricModal(${m.id})">Edit</button>
+          <button class="btn btn-ghost btn-sm" onclick="app.viewMetric(${m.id})">View log</button>
+          ${m.builtin ? "" : `<button class="btn btn-danger btn-sm" onclick="app.deleteMetric(${m.id})">Delete</button>`}
+        </div>
+      </div>
+    `;
+  }
+
+  el.innerHTML = html;
+  if (window.lucide) { lucide.createIcons(); }
+}
+
+async function renderHealthMetricDetail(el) {
+  if (!viewingMetricId) {
+    navigate("health-today");
+    return;
+  }
+  const m = await db.healthMetrics.get(viewingMetricId);
+  if (!m) {
+    viewingMetricId = null;
+    navigate("health-today");
+    return;
+  }
+  const readings = sortReadings(await db.healthReadings.listForMetric(m.id));
+
+  let html = `
+    <div class="section-title">${esc(m.name)}</div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="muted" style="font-size:.85rem">${esc(m.kind)} · ${esc(m.unit)} · ${readings.length} reading${readings.length === 1 ? "" : "s"}</div>
+        <button class="btn btn-primary btn-sm" onclick="app.addReading(${m.id})">+ Add</button>
+      </div>
+    </div>
+  `;
+
+  if (readings.length === 0) {
+    html += "<div class=\"empty\">No readings yet.</div>";
+  } else {
+    html += "<div class=\"card\">";
+    for (const r of readings) {
+      html += `
+        <div class="reading-row" style="align-items:flex-start">
+          <div>
+            <div class="reading-value">${formatReadingValue(r, m)} <span class="muted" style="font-weight:400">${esc(m.unit)}</span></div>
+            ${r.notes ? `<div class="reading-notes">${esc(r.notes)}</div>` : ""}
+          </div>
+          <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <span class="reading-date">${formatDateLabel(r.date)}</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm" onclick="app.editReading(${r.id})">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="app.deleteReading(${r.id})">Delete</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    html += "</div>";
+  }
+
+  el.innerHTML = html;
+}
+
+function viewMetric(metricId) {
+  viewingMetricId = metricId;
+  navigate("health-metric");
+}
+
+function metricMenu(metricId) {
+  toggleMenu(`metric-${metricId}`);
+}
+
+async function addReading(metricId) {
+  const m = await db.healthMetrics.get(metricId);
+  if (!m) { return; }
+  showReadingModal(m, null);
+}
+
+async function editReading(readingId) {
+  const r = await db.healthReadings.get(readingId);
+  if (!r) { return; }
+  const m = await db.healthMetrics.get(r.metricId);
+  if (!m) { return; }
+  showReadingModal(m, r);
+}
+
+function localTimeFromISO(isoStr) {
+  const d = new Date(isoStr);
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+
+function currentLocalTime() {
+  const now = new Date();
+  return String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+}
+
+function showReadingModal(metric, existing) {
+  const modal = document.getElementById("modal");
+  const backdrop = document.getElementById("modal-backdrop");
+  const date = existing ? existing.date : todayISODate();
+  const time = existing && existing.recordedAt ? localTimeFromISO(existing.recordedAt) : currentLocalTime();
+  const notes = existing ? (existing.notes || "") : "";
+
+  let valueFields;
+  if (metric.kind === "dual") {
+    const sys = existing ? existing.valueSystolic : 120;
+    const dia = existing ? existing.valueDiastolic : 80;
+    valueFields = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field">
+          <label>Systolic</label>
+          <input type="text" id="m-rd-sys" value="${sys}" inputmode="numeric" pattern="[0-9]*">
+        </div>
+        <div class="field">
+          <label>Diastolic</label>
+          <input type="text" id="m-rd-dia" value="${dia}" inputmode="numeric" pattern="[0-9]*">
+        </div>
+      </div>`;
+  } else {
+    const val = existing ? existing.value : "";
+    valueFields = `
+      <div class="field">
+        <label>${esc(metric.name)} (${esc(metric.unit)})</label>
+        <input type="number" id="m-rd-val" value="${val}" step="any" inputmode="decimal">
+      </div>`;
+  }
+
+  modal.innerHTML = `
+    <div class="modal-title">${existing ? "Edit" : "New"} ${esc(metric.name)} reading</div>
+    ${valueFields}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="m-rd-date" value="${date}">
+      </div>
+      <div class="field">
+        <label>Time</label>
+        <input type="time" id="m-rd-time" value="${time}">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <input type="text" id="m-rd-notes" value="${esc(notes)}">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="app.closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="app.saveReading(${metric.id}, ${existing ? existing.id : "null"})">Save</button>
+    </div>
+  `;
+  backdrop.classList.remove("hidden");
+}
+
+async function saveReading(metricId, readingId) {
+  const m = await db.healthMetrics.get(metricId);
+  if (!m) { return; }
+  const date = document.getElementById("m-rd-date").value;
+  const time = document.getElementById("m-rd-time").value;
+  const notes = document.getElementById("m-rd-notes").value.trim();
+  if (!date) { toast("Date is required"); return; }
+
+  const recordedAt = new Date(`${date}T${time || "00:00"}:00`).toISOString();
+
+  const record = {
+    metricId,
+    date,
+    notes,
+    source: "manual",
+    recordedAt,
+  };
+  if (readingId) { record.id = readingId; }
+
+  if (m.kind === "dual") {
+    const sys = parseFloat(document.getElementById("m-rd-sys").value);
+    const dia = parseFloat(document.getElementById("m-rd-dia").value);
+    if (isNaN(sys) || isNaN(dia)) { toast("Enter both values"); return; }
+    record.valueSystolic = sys;
+    record.valueDiastolic = dia;
+  } else {
+    const val = parseFloat(document.getElementById("m-rd-val").value);
+    if (isNaN(val)) { toast("Enter a value"); return; }
+    record.value = val;
+  }
+
+  await db.healthReadings.save(record);
+  closeModal();
+  toast("Reading saved");
+  renderView();
+}
+
+async function deleteReading(readingId) {
+  if (!confirm("Delete this reading?")) { return; }
+  await db.healthReadings.delete(readingId);
+  toast("Reading deleted");
+  renderView();
+}
+
+async function showMetricModal(metricId) {
+  const modal = document.getElementById("modal");
+  const backdrop = document.getElementById("modal-backdrop");
+  const existing = metricId ? await db.healthMetrics.get(metricId) : null;
+  const name = existing ? existing.name : "";
+  const kind = existing ? existing.kind : "numeric";
+  const unit = existing ? existing.unit : "";
+  const builtin = existing && existing.builtin;
+
+  modal.innerHTML = `
+    <div class="modal-title">${existing ? "Edit" : "New"} metric</div>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="m-met-name" value="${esc(name)}" ${builtin ? "readonly" : ""} placeholder="e.g. Resting Heart Rate">
+    </div>
+    <div class="field">
+      <label>Kind</label>
+      <select id="m-met-kind" ${existing ? "disabled" : ""}>
+        <option value="numeric"  ${kind === "numeric"  ? "selected" : ""}>Numeric (single value)</option>
+        <option value="dual"     ${kind === "dual"     ? "selected" : ""}>Dual (e.g. systolic/diastolic)</option>
+        <option value="duration" ${kind === "duration" ? "selected" : ""}>Duration</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Unit</label>
+      <input type="text" id="m-met-unit" value="${esc(unit)}" placeholder="e.g. bpm, lb, kg, hr">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="app.closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="app.saveMetric(${existing ? existing.id : "null"})">Save</button>
+    </div>
+  `;
+  backdrop.classList.remove("hidden");
+}
+
+async function saveMetric(metricId) {
+  const name = document.getElementById("m-met-name").value.trim();
+  const kind = document.getElementById("m-met-kind").value;
+  const unit = document.getElementById("m-met-unit").value.trim();
+  if (!name) { toast("Name is required"); return; }
+  if (!unit) { toast("Unit is required"); return; }
+
+  const record = { name, kind, unit, builtin: false };
+  if (metricId) {
+    const prev = await db.healthMetrics.get(metricId);
+    if (prev) {
+      record.id = metricId;
+      record.builtin = prev.builtin || false;
+      // Built-ins keep their name regardless
+      if (prev.builtin) { record.name = prev.name; }
+    }
+  }
+
+  try {
+    await db.healthMetrics.save(record);
+  } catch (err) {
+    if (err && err.name === "ConstraintError") {
+      toast("A metric with that name already exists");
+      return;
+    }
+    throw err;
+  }
+  closeModal();
+  toast("Metric saved");
+  renderView();
+}
+
+async function deleteMetric(metricId) {
+  const m = await db.healthMetrics.get(metricId);
+  if (!m || m.builtin) { return; }
+  const readings = await db.healthReadings.listForMetric(metricId);
+  const msg = readings.length > 0
+    ? `Delete "${m.name}" and ${readings.length} reading${readings.length === 1 ? "" : "s"}?`
+    : `Delete "${m.name}"?`;
+  if (!confirm(msg)) { return; }
+  for (const r of readings) {
+    await db.healthReadings.delete(r.id);
+  }
+  await db.healthMetrics.delete(metricId);
+  toast("Metric deleted");
+  renderView();
+}
+
+// ─── Nutrition (placeholder) ─────────────────────────────────────────────────
+
+function renderNutritionHome(el) {
+  el.innerHTML = `
+    <div class="empty" style="padding-top:80px">
+      <div style="font-size:2rem;margin-bottom:12px">🍎</div>
+      <div style="font-weight:600;margin-bottom:6px">Nutrition tracking — coming soon</div>
+      <div style="font-size:.85rem">This mode is a placeholder. Check back later.</div>
+    </div>
+  `;
+}
+
 // ─── Expose to HTML ───────────────────────────────────────────────────────────
 
 window.app = {
   navigate,
+  setMode,
   toggleTheme,
   startWorkout,
   finishWorkout,
@@ -1724,6 +2229,15 @@ window.app = {
   exportJSON,
   triggerImport,
   importJSON,
+  viewMetric,
+  metricMenu,
+  addReading,
+  editReading,
+  saveReading,
+  deleteReading,
+  showMetricModal,
+  saveMetric,
+  deleteMetric,
 };
 
 boot();

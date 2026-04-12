@@ -1,7 +1,7 @@
 {
-  "name": "Simple Exercise",
-  "short_name": "Exercise",
-  "description": "Track workouts, routines, and progress",
+  "name": "SimpleFit",
+  "short_name": "SimpleFit",
+  "description": "Track workouts, health metrics, and progress",
   "start_url": "/simple-exercise/",
   "display": "standalone",
   "background_color": "#0f172a",

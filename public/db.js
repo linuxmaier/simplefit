@@ -1,6 +1,8 @@
-// IndexedDB schema version
+// IndexedDB schema
+// v1 — exercise stores (routines, exercises, routineExercises, sessions, sessionExercises)
+// v2 — + health stores (healthMetrics, healthReadings)
 const DB_NAME = "exercise-tracker";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let db = null;
 
@@ -15,28 +17,41 @@ export function openDB() {
     req.onupgradeneeded = (e) => {
       const d = e.target.result;
 
-      // Routines: named workout plans
-      const routines = d.createObjectStore("routines", { keyPath: "id", autoIncrement: true });
-      routines.createIndex("name", "name", { unique: false });
+      // v1 — exercise stores. Guarded so v1→v2 upgrades keep existing data.
+      if (!d.objectStoreNames.contains("routines")) {
+        const routines = d.createObjectStore("routines", { keyPath: "id", autoIncrement: true });
+        routines.createIndex("name", "name", { unique: false });
+      }
+      if (!d.objectStoreNames.contains("exercises")) {
+        const exercises = d.createObjectStore("exercises", { keyPath: "id", autoIncrement: true });
+        exercises.createIndex("name", "name", { unique: true });
+      }
+      if (!d.objectStoreNames.contains("routineExercises")) {
+        const routineExercises = d.createObjectStore("routineExercises", { keyPath: "id", autoIncrement: true });
+        routineExercises.createIndex("routineId", "routineId");
+        routineExercises.createIndex("exerciseId", "exerciseId");
+      }
+      if (!d.objectStoreNames.contains("sessions")) {
+        const sessions = d.createObjectStore("sessions", { keyPath: "id", autoIncrement: true });
+        sessions.createIndex("date", "date");
+        sessions.createIndex("routineId", "routineId");
+      }
+      if (!d.objectStoreNames.contains("sessionExercises")) {
+        const sessionExercises = d.createObjectStore("sessionExercises", { keyPath: "id", autoIncrement: true });
+        sessionExercises.createIndex("sessionId", "sessionId");
+        sessionExercises.createIndex("exerciseId", "exerciseId");
+      }
 
-      // Master exercise list
-      const exercises = d.createObjectStore("exercises", { keyPath: "id", autoIncrement: true });
-      exercises.createIndex("name", "name", { unique: true });
-
-      // Exercises within a routine (with defaults)
-      const routineExercises = d.createObjectStore("routineExercises", { keyPath: "id", autoIncrement: true });
-      routineExercises.createIndex("routineId", "routineId");
-      routineExercises.createIndex("exerciseId", "exerciseId");
-
-      // Workout sessions
-      const sessions = d.createObjectStore("sessions", { keyPath: "id", autoIncrement: true });
-      sessions.createIndex("date", "date");
-      sessions.createIndex("routineId", "routineId");
-
-      // Exercises performed in a session
-      const sessionExercises = d.createObjectStore("sessionExercises", { keyPath: "id", autoIncrement: true });
-      sessionExercises.createIndex("sessionId", "sessionId");
-      sessionExercises.createIndex("exerciseId", "exerciseId");
+      // v2 — health stores
+      if (!d.objectStoreNames.contains("healthMetrics")) {
+        const healthMetrics = d.createObjectStore("healthMetrics", { keyPath: "id", autoIncrement: true });
+        healthMetrics.createIndex("name", "name", { unique: true });
+      }
+      if (!d.objectStoreNames.contains("healthReadings")) {
+        const healthReadings = d.createObjectStore("healthReadings", { keyPath: "id", autoIncrement: true });
+        healthReadings.createIndex("metricId", "metricId");
+        healthReadings.createIndex("date", "date");
+      }
     };
 
     req.onsuccess = (e) => {
@@ -137,16 +152,37 @@ export const sessionExercises = {
   delete: (id) => remove("sessionExercises", id),
 };
 
+// ─── Health Metrics ──────────────────────────────────────────────────────────
+
+export const healthMetrics = {
+  list: () => all("healthMetrics"),
+  get: (id) => get("healthMetrics", id),
+  save: (m) => put("healthMetrics", { ...m, updatedAt: new Date().toISOString() }),
+  delete: (id) => remove("healthMetrics", id),
+};
+
+// ─── Health Readings ─────────────────────────────────────────────────────────
+
+export const healthReadings = {
+  list: () => all("healthReadings"),
+  listForMetric: (metricId) => all("healthReadings", "metricId", metricId),
+  get: (id) => get("healthReadings", id),
+  save: (r) => put("healthReadings", r),
+  delete: (id) => remove("healthReadings", id),
+};
+
 // ─── Export / Import ─────────────────────────────────────────────────────────
 
 export async function exportAll() {
   await openDB();
-  const [r, e, re, s, se] = await Promise.all([
-    routines.list(),
-    exercises.list(),
-    routineExercises.listForRoutine ? all("routineExercises") : [],
-    sessions.list(),
+  const [r, e, re, s, se, hm, hr] = await Promise.all([
+    all("routines"),
+    all("exercises"),
+    all("routineExercises"),
+    all("sessions"),
     all("sessionExercises"),
+    all("healthMetrics"),
+    all("healthReadings"),
   ]);
   return {
     version: DB_VERSION,
@@ -156,12 +192,22 @@ export async function exportAll() {
     routineExercises: re,
     sessions: s,
     sessionExercises: se,
+    healthMetrics: hm,
+    healthReadings: hr,
   };
 }
 
 export async function importAll(data) {
   await openDB();
-  const stores = ["routines", "exercises", "routineExercises", "sessions", "sessionExercises"];
+  const stores = [
+    "routines",
+    "exercises",
+    "routineExercises",
+    "sessions",
+    "sessionExercises",
+    "healthMetrics",
+    "healthReadings",
+  ];
   const t = db.transaction(stores, "readwrite");
 
   // Clear all stores first
@@ -175,6 +221,8 @@ export async function importAll(data) {
     routineExercises: data.routineExercises || [],
     sessions: data.sessions || [],
     sessionExercises: data.sessionExercises || [],
+    healthMetrics: data.healthMetrics || [],
+    healthReadings: data.healthReadings || [],
   };
 
   for (const [store, rows] of Object.entries(records)) {

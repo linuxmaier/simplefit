@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#2563eb">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Exercise Tracker</title>
+  <title>SimpleFit</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="stylesheet" href="style.css">
@@ -18,7 +18,7 @@
 <body>
   <div id="app">
     <header>
-      <h1 id="page-title">Workout</h1>
+      <div class="segmented-control" id="mode-switcher" role="tablist"></div>
       <div class="header-icons">
         <span class="header-cloud" id="header-cloud"></span>
         <button class="theme-toggle" id="theme-toggle" onclick="app.toggleTheme()"></button>

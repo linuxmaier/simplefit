@@ -1,6 +1,12 @@
-# Simple Exercise Tracker
+# SimpleFit
 
-A lightweight, mobile-first PWA for tracking workouts. Runs entirely in the browser — no server, no account required. Data lives in your browser's IndexedDB and can be backed up to Google Drive.
+A lightweight, mobile-first PWA for tracking workouts and health metrics. Runs entirely in the browser — no server, no account required. Data lives in your browser's IndexedDB and can be backed up to Google Drive.
+
+SimpleFit is organized into modes — switch between them using the segmented control in the header:
+
+- **Exercise** — routines, workouts, progress charts
+- **Health** — blood pressure, weight, sleep, and custom metrics (manual entry)
+- **Nutrition** — placeholder (coming soon)
 
 ## Screenshots
 
