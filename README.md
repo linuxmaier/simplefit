@@ -12,16 +12,16 @@ SimpleFit is organized into modes — switch between them using the segmented co
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/home.png" width="180"></td>
-    <td><img src="docs/screenshots/active.png" width="180"></td>
+    <td><img src="docs/screenshots/exercising.png" width="180"></td>
     <td><img src="docs/screenshots/routines.png" width="180"></td>
-    <td><img src="docs/screenshots/log.png" width="180"></td>
+    <td><img src="docs/screenshots/logs.png" width="180"></td>
+    <td><img src="docs/screenshots/bp-reading.png" width="180"></td>
   </tr>
   <tr>
-    <td align="center">Home</td>
     <td align="center">Active Workout</td>
     <td align="center">Routines</td>
-    <td align="center">History</td>
+    <td align="center">Log</td>
+    <td align="center">Health</td>
   </tr>
 </table>
 
