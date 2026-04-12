@@ -8,9 +8,9 @@ A mobile-first PWA personal health tracker hosted on GitHub Pages. No build step
 
 The app is organized into three **modes** (Exercise, Nutrition, Health), selected via a persistent segmented control in the header. Exercise and Health are live; Nutrition is a placeholder.
 
-- **App name:** SimpleFit (user-facing) — the repo and URL still use `simple-exercise`.
-- **Live URL:** `https://linuxmaier.github.io/simple-exercise/`
-- **Repo:** `git@github.com:linuxmaier/simple-exercise.git`
+- **App name:** SimpleFit
+- **Live URL:** `https://linuxmaier.github.io/simplefit/`
+- **Repo:** `git@github.com:linuxmaier/simplefit.git`
 
 ## File structure
 
@@ -35,7 +35,7 @@ package.json      npm scripts: lint, lint:fix
 ## Architecture
 
 ### No build step
-All `public/` files are served verbatim by GitHub Pages. **Use relative paths everywhere** — absolute paths like `/style.css` resolve to the domain root, not the `/simple-exercise/` subdirectory.
+All `public/` files are served verbatim by GitHub Pages. **Use relative paths everywhere** — absolute paths like `/style.css` resolve to the domain root, not the `/simplefit/` subdirectory.
 
 ### SPA pattern
 `app.js` renders all views imperatively into `<main id="main">` by building HTML strings and assigning to `el.innerHTML`. There is no framework.
