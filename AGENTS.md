@@ -17,7 +17,7 @@ The app is organized into three **modes** (Exercise, Nutrition, Health), selecte
 ```
 public/
   index.html      App shell (loads app.js as type="module")
-  app.js          Main SPA — all views, state, UI logic (~1700 lines)
+  app.js          Main SPA — all views, state, UI logic (~2250 lines)
   db.js           IndexedDB layer — all persistence
   drive.js        Google Drive integration (GIS implicit OAuth flow)
   style.css       Light/cream mobile-first theme with dark mode (CSS custom properties)
@@ -198,7 +198,7 @@ ESLint 9 flat config in `eslint.config.js`. Rules: double quotes, semicolons, 2-
 
 ## Service worker / caching
 
-`sw.js` caches all static assets under `CACHE = "exercise-tracker-v3"`. **Bump the cache name when adding new assets** to the ASSETS array, otherwise the old service worker will serve stale files. Google API requests are passed through (not cached).
+`sw.js` caches all static assets under `CACHE = "simplefit-v4"`. **Bump the cache name when adding new assets** to the ASSETS array, otherwise the old service worker will serve stale files. Google API requests are passed through (not cached).
 
 ## Deployment
 

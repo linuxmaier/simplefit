@@ -29,6 +29,7 @@ SimpleFit is organized into modes — switch between them using the segmented co
 
 ## Features
 
+**Exercise**
 - Define reusable **routines** composed of exercises with default sets, reps, and weight
 - **Per-set progress tracking** — a segmented progress bar for each exercise lets you tap to mark individual sets complete
 - **Timed exercise support** — exercises can be weight/reps-based or duration-based (e.g. planks, runs) with an in-app countdown timer that auto-completes the set and fires a system notification when done
@@ -36,6 +37,14 @@ SimpleFit is organized into modes — switch between them using the segmented co
 - Add exercises on the fly during a session
 - View **exercise history** with a weight-over-time chart
 - Browse a **session log** of past workouts
+
+**Health**
+- Track **Blood Pressure** (systolic/diastolic), **Weight**, **Sleep**, and any custom metric you define
+- Each reading records date and time (defaults to now, editable)
+- Per-metric log view with edit and delete
+- Custom metrics can be numeric, dual-value (like BP), or duration-based
+
+**General**
 - **Google Drive backup/restore** — syncs a single JSON file to your Drive's hidden app data folder
 - **Local JSON export/import** as a manual backup fallback
 - Installable on Android (and iOS) as a home screen app via PWA
@@ -107,6 +116,14 @@ Backups are stored in your Google Drive's hidden **App Data** folder — they wo
 - Tap **Log** to see past sessions
 - Tap any session to see the full exercise breakdown
 - Scroll down to **Exercise Progress** and tap an exercise to see a weight-over-time chart and full session history for that movement
+
+### Tracking health metrics
+
+1. Switch to **Health** mode using the segmented control in the header
+2. Blood Pressure, Weight, and Sleep are pre-loaded — tap **+ Add** on any card to record a reading
+3. The reading form shows date and time (defaults to now) — adjust if logging retroactively
+4. Tap a metric name to see its full chronological log; tap any entry to edit or delete it
+5. To add a custom metric, tap **Metrics** → **+ New Metric**, choose a name, type, and unit
 
 ### Backing up and restoring
 
