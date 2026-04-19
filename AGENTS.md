@@ -176,7 +176,7 @@ Each exercise in the active workout shows a segmented progress bar (one segment 
 Exercises have a `type` field: `"weight"` (default, reps-based) or `"timed"` (duration-based). Timed exercises show a countdown timer with Start/Stop controls in the workout view. The timer auto-completes the current set when it reaches zero, with vibration + a system notification (if enabled). Timer state is ephemeral (`activeTimer` in module scope) — not persisted to DB.
 
 ### Notifications
-Web Notifications API is used for timer completion alerts. Permission is requested from the Settings page and stored as `localStorage["notificationsEnabled"] = "true"`. `notificationsEnabled()` checks both the permission state and the localStorage flag. If a session contains timed exercises and notifications are not enabled, a banner is shown in the workout view linking to Settings. Key functions: `requestNotificationPermission()`, `disableNotifications()`.
+Web Notifications API is used for timer completion alerts. Permission is requested from the Settings page and stored as `localStorage["notificationsEnabled"] = "true"`. `notificationsEnabled()` checks both the permission state and the localStorage flag. If a session contains timed exercises and notifications are not enabled, a banner is shown in the workout view linking to Settings. Key functions: `requestNotificationPermission()`, `disableNotifications()`, `playAlert()`. Notifications are shown via `ServiceWorkerRegistration.showNotification()` (required on Android and iOS PWA, where `new Notification()` throws), with a `new Notification()` fallback for desktop browsers without a service worker.
 
 ### Update routine defaults prompt
 When a user edits sets/reps/weight/duration inline during a workout, `saveInlineEdit` compares the new values against the routine exercise defaults (via `routineExerciseId`). If they differ, an action toast appears offering to update the routine defaults. This only applies to exercises that came from a routine (not ad-hoc adds).
@@ -198,7 +198,7 @@ ESLint 9 flat config in `eslint.config.js`. Rules: double quotes, semicolons, 2-
 
 ## Service worker / caching
 
-`sw.js` caches all static assets under `CACHE = "simplefit-v4"`. **Bump the cache name when adding new assets** to the ASSETS array, otherwise the old service worker will serve stale files. Google API requests are passed through (not cached).
+`sw.js` caches all static assets under `CACHE = "simplefit-v5"`. **Bump the cache name whenever cached assets change** — both when adding new files to the ASSETS array and when you want returning users to pick up bugfixes in cached JS/CSS. Otherwise the old service worker will serve stale files. Google API requests are passed through (not cached).
 
 ## Deployment
 

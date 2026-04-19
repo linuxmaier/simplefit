@@ -1,4 +1,4 @@
-const CACHE = "simplefit-v4";
+const CACHE = "simplefit-v5";
 const ASSETS = [
   "./",
   "./index.html",

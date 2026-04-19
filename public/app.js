@@ -555,20 +555,13 @@ function startTimer(exId) {
       clearInterval(activeTimer.intervalId);
       const completedSetNum = activeTimer.setNum;
       activeTimer = null;
-      playAlert(ex.exerciseName);
-      tapSet(exId, completedSetNum);
-      // Re-render the timer area to show Start button again
-      const row = document.getElementById(`ex-${exId}`);
-      if (row) {
-        const actionsEl = row.querySelector(".ex-actions");
-        if (actionsEl) {
-          const btn = actionsEl.querySelector(".timer-active, .btn");
-          if (btn) {
-            const parent = btn.closest(".timer-active") || btn;
-            parent.outerHTML = `<button class="btn btn-ghost btn-sm" onclick="app.startTimer(${exId})">Start</button>`;
-          }
-        }
+      // Swap Stop → Start first so the UI is never left stuck if playAlert throws
+      const timerEl = document.getElementById(`timer-${exId}`);
+      if (timerEl) {
+        timerEl.outerHTML = `<button class="btn btn-ghost btn-sm" onclick="app.startTimer(${exId})">Start</button>`;
       }
+      tapSet(exId, completedSetNum);
+      playAlert(ex.exerciseName);
     }
   }, 1000);
 
@@ -631,15 +624,26 @@ function disableNotifications() {
   navigate("settings");
 }
 
-function playAlert(exerciseName) {
+async function playAlert(exerciseName) {
   if (navigator.vibrate) { navigator.vibrate([200, 100, 200]); }
-  if (notificationsEnabled()) {
-    new Notification("Set complete", {
-      body: exerciseName ? `${exerciseName} — time's up!` : "Timer finished",
-      icon: "./icon.svg",
-      silent: false,
-    });
-  }
+  if (!notificationsEnabled()) { return; }
+  const title = "Set complete";
+  const opts = {
+    body: exerciseName ? `${exerciseName} — time's up!` : "Timer finished",
+    icon: "./icon.svg",
+    silent: false,
+  };
+  // Prefer ServiceWorkerRegistration.showNotification — required on Android / iOS PWA,
+  // where `new Notification()` throws. Fall back to the constructor on platforms
+  // without a service worker.
+  try {
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, opts);
+      return;
+    }
+    new Notification(title, opts);
+  } catch { /* best-effort */ }
 }
 
 // ─── Update routine defaults ────────────────────────────────────────────────
