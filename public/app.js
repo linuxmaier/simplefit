@@ -770,7 +770,12 @@ async function renderRoutines(el) {
           <div style="display:flex;align-items:center;gap:8px">
             <span class="muted" style="font-size:.8rem">${exes.length} exercise${exes.length !== 1 ? "s" : ""}</span>
             <i data-lucide="chevron-down" id="routine-chevron-${r.id}" style="width:16px;height:16px;stroke:var(--muted);transition:transform .2s;display:inline-block${open ? ";transform:rotate(180deg)" : ""}"></i>
+            <button class="menu-btn" onclick="event.stopPropagation();app.routineMenu(${r.id})">⋮</button>
           </div>
+        </div>
+        <div class="inline-actions hidden" id="menu-routine-${r.id}">
+          <button class="btn btn-ghost btn-sm" onclick="app.showRoutineModal(${r.id})">Edit Routine</button>
+          <button class="btn btn-danger btn-sm" onclick="app.deleteRoutine(${r.id})">Delete Routine</button>
         </div>
         <div id="routine-body-${r.id}" style="display:${open ? "block" : "none"}">
           ${r.notes ? `<div class="muted" style="font-size:.85rem;margin-bottom:10px">${esc(r.notes)}</div>` : ""}
@@ -799,11 +804,6 @@ async function renderRoutines(el) {
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center">
             <button class="btn btn-ghost btn-sm" onclick="app.showAddExerciseToRoutine(${r.id})">+ Add Exercise</button>
-            <button class="menu-btn" onclick="app.routineMenu(${r.id})">⋮</button>
-          </div>
-          <div class="inline-actions hidden" id="menu-routine-${r.id}">
-            <button class="btn btn-ghost btn-sm" onclick="app.showRoutineModal(${r.id})">Edit Routine</button>
-            <button class="btn btn-danger btn-sm" onclick="app.deleteRoutine(${r.id})">Delete Routine</button>
           </div>
         </div>
       </div>`;
