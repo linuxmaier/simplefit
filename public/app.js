@@ -108,8 +108,7 @@ async function boot() {
         if (window.google) {
           clearInterval(interval);
           await tryInit();
-          // Re-render home to update the reconnect banner if needed
-          if (currentView === "home") { renderView(); }
+          renderHeaderIcons();
         }
       }, 100);
     }
@@ -167,6 +166,16 @@ function renderHeaderIcons() {
   const clientConfigured = localStorage.getItem("gClientId");
   const signedIn = drive.isSignedIn();
 
+  const banner = document.getElementById("drive-banner");
+  if (banner) {
+    if (reconnectNeeded && clientConfigured) {
+      banner.innerHTML = "<span>Drive disconnected</span>"
+        + "<button class=\"btn btn-warn btn-sm\" onclick=\"app.reconnectDrive()\">Reconnect</button>";
+    } else {
+      banner.innerHTML = "";
+    }
+  }
+
   const cloud = document.getElementById("header-cloud");
   if (clientConfigured) {
     if (signedIn) {
@@ -219,13 +228,6 @@ async function renderHome(el) {
   const routineList = await db.routines.list();
 
   let html = "";
-
-  if (localStorage.getItem("driveReconnectNeeded") && localStorage.getItem("gClientId")) {
-    html += `<div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;border-left:4px solid var(--warn)">
-      <span style="font-weight:600">Drive disconnected</span>
-      <button class="btn btn-warn btn-sm" onclick="app.reconnectDrive()">Reconnect</button>
-    </div>`;
-  }
 
   if (activeSession) {
     html += `<div class="card">

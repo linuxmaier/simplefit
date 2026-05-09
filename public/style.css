@@ -506,6 +506,19 @@ canvas { max-width: 100%; }
   margin-bottom: 24px;
 }
 
+/* ── Drive reconnect banner ──────────────────────────────────────────────── */
+#drive-banner:not(:empty) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px var(--gap);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  border-left: 4px solid var(--warn);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
 /* ── Notification banner ──────────────────────────────────────────────────── */
 .notif-banner {
   background: var(--surface);
